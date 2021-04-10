@@ -14,7 +14,10 @@ from sklearn.cross_decomposition import PLSRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.neighbors import KNeighborsRegressor
+from mlxtend.regressor import StackingRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
 def make_matrix(m, n, fill=0.0):
     mat = []
     for i in range(m):
@@ -114,7 +117,22 @@ class Regression(Classification):
             self.features_y[r - 1] = sh.cell(row = r,column = labelIndex).value
         processor = Processing()
         self.features_x, self.features_y = processor.abnormalElimination(self.features_x,self.features_y)
-        self.features_X = processor.stander(self.features_x) #标准化
+        #self.features_X = processor.stander(self.features_x) #标准化
+        self.features_X = processor.normalizer(self.features_x) #归一化
+class StackingRegression(Regression):
+    def __init__(self):
+        super().__init__()
+        lr = LinearRegression()
+        svr_lin = SVR(kernel='linear')
+        ridge = Ridge(random_state=1)
+        knn = KNeighborsRegressor(n_neighbors=5)
+        bpnn = MLPRegressor(solver='lbfgs', alpha=1e-5,
+                    hidden_layer_sizes=(26, 15), random_state=1, max_iter=10000)
+        self.model = StackingRegressor(regressors = [lr, svr_lin, ridge, knn], meta_regressor = bpnn)
+class KNNRegression(Regression):
+    def __init__(self):
+        super().__init__()
+        self.model = KNeighborsRegressor(n_neighbors=5)
 class BpnnRegression(Regression):
     def __init__(self):
         super().__init__()
@@ -258,6 +276,7 @@ class Processing:
         plt.plot(sampleArr, facArr, LineWidth = 0.5)
         plt.xlabel('sample number')
         plt.ylabel('fac')
+        plt.show()
         for i in range(len(facArr)):
             if facArr[i] >= 100:
                 #标出与其他样本有显著差异的异常样本
@@ -265,7 +284,6 @@ class Processing:
                 #移除异常样本
                 del features[i]
                 del labels[i]
-        plt.show()
         return features,labels
 
     def searchSample(self, x, x_train):
@@ -449,6 +467,7 @@ class Draw:
         self.modelFile = modelFile
         self.individualFile = individualFile
         self.loadModel()
+        self.featuresPath = 'D:\\soil-feature.xlsx'
         self.features, self.label = self.loadFeature(individualFile)
     def loadModel(self):
         with open(self.modelFile,'rb') as f:
@@ -469,7 +488,7 @@ class Draw:
                 featureIndexs.append(i)
         self.featuresNum = featureNum
         self.featuresIndex = featureIndexs
-        wb = openpyxl.load_workbook('D:\\soil-feature.xlsx')
+        wb = openpyxl.load_workbook(self.featuresPath)
         sh = wb['Sheet1']
         row = sh.max_row
         column = sh.max_column
@@ -487,42 +506,6 @@ class Draw:
             som = sh.cell(row = r,column = labelIndex).value
             label[r - 1] = som
         return features, label
-    def bpnnTest(self):
-        #寻找bpnn最优隐含层节点数
-        param = dict(hidden_layer_sizes=range(1,100))
-        x_train,x_test,y_train,y_test = train_test_split(self.features,self.label)
-        grid = RandomizedSearchCV(estimator=MLPRegressor(), param_distributions=param)
-        grid_result = grid.fit(x_train, y_train)
-        print('Best：%f using %s' % (grid_result.best_score_, grid_result.best_params_))
-        '''
-        RMSEArr = []
-        RMSERArr = []
-        nodesMax = 100#self.featuresNum * 2 // 3
-        for n in range(1,nodesMax):
-            self.model = MLPRegressor(solver='lbfgs', alpha=1e-5,
-                    hidden_layer_sizes=(n, ), random_state=1, max_iter=10000)
-            x_train,x_test,y_train,y_test = train_test_split(self.features,self.label)
-            self.model.fit(x_train,y_train)
-            preds = self.model.predict(x_test)
-            predsR = self.model.predict(x_train)
-            preds = preds.flatten()
-            sigma = 0
-            sigmaR = 0
-            for i in range(len(x_test)):
-                sigma = sigma + (preds[i] - y_test[i]) ** 2
-            for i in range(len(x_train)):
-                sigmaR = sigmaR + (predsR[i] - y_train[i]) ** 2
-            MSE = sigma / len(x_test)
-            RMSE = math.sqrt(MSE)
-            RMSER = math.sqrt(sigmaR / len(x_train))
-            RMSEArr.append(RMSE)
-            RMSERArr.append(RMSER)
-        generalizerError, = plt.plot([i for i in range(1,nodesMax)], RMSEArr)
-        trainError, = plt.plot([i for i in range(1,nodesMax)], RMSERArr,color = 'r')
-        plt.xlabel('number of hidden layer nodes')
-        plt.ylabel('RMSE')
-        plt.legend([generalizerError, trainError], ['generalizer error','train error'], loc='upper left')
-        plt.show()'''
     def drawCombinedPredict(self):
         bpnnFeatures,bpnnLabels = self.loadFeature('bpnn-individual.txt')
         plsrFeatures,plsrLabels = self.loadFeature('plsr-individual.txt')
@@ -541,8 +524,8 @@ class Draw:
         plt.show()
     def drawFit(self):
         x_train,x_test,y_train,y_test = train_test_split(self.features,self.label)
-        x_test = self.features
-        y_test = self.label
+        #x_test = self.features
+        #y_test = self.label
         preds = self.model.predict(x_test)
         rmse = mean_squared_error(y_test,preds) ** 0.5
         mase = mean_absolute_error(y_test,preds)
@@ -595,19 +578,20 @@ class Draw:
         plt.boxplot(boxData,labels = boxLabels,widths = 0.5)
         plt.show()
 if __name__ == '__main__':
-    '''
     ga = GA()
-    ga.modelFile = 'svr-linear.pickle'
-    ga.xlsFile = 'svr-dimension-reduce.xlsx'
-    ga.individualFile = 'svr-individual.txt'
-    ga.cls = SvrRegression()
+    ga.modelFile = 'stacking-linear.pickle'
+    ga.xlsFile = 'stacking-dimension-reduce.xlsx'
+    ga.individualFile = 'stacking-individual.txt'
+    ga.cls = StackingRegression()
     ga.evolution()
     '''
     bpnnDraw = Draw('bpnn-linear.pickle', 'bpnn-individual.txt')
     bpnnDraw.drawFit()
+    stDraw = Draw('stacking-linear.pickle', 'stacking-individual.txt')
+    stDraw.drawFit()
     svrDraw = Draw('svr-linear.pickle', 'svr-individual.txt')
     svrDraw.drawFit()
     plsrDraw = Draw('plsr-linear.pickle', 'plsr-individual.txt')
     plsrDraw.drawFit()
     bpnnDraw.model = PlsrBpnnRegression()
-    bpnnDraw.drawCombinedPredict()
+    bpnnDraw.drawCombinedPredict()'''
