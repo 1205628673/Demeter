@@ -41,7 +41,10 @@ class Classification:
     def initRowColumn(self):
         wb = openpyxl.load_workbook('D:\\soil-feature.xlsx')
         sh = wb['Sheet1']
-        row = sh.max_row
+        row = 0
+        for i in wb.active:
+            if not all([cell.value == None for cell in i]):
+                row += 1
         column = sh.max_column
         self.featureNum = column - 1
         self.features_x = [[0 for i in range(column - 1)] for j in range(row)]
@@ -107,7 +110,10 @@ class Regression(Classification):
     def readFeature(self):
         wb = openpyxl.load_workbook('D:\\soil-feature.xlsx')
         sh = wb['Sheet1']
-        row = sh.max_row
+        row = 0
+        for i in wb.active:
+            if not all([cell.value == None for cell in i]):
+                row += 1
         column = sh.max_column
         for r in range(1,row + 1):
             for c in range(1,column):
@@ -490,7 +496,11 @@ class Draw:
         self.featuresIndex = featureIndexs
         wb = openpyxl.load_workbook(self.featuresPath)
         sh = wb['Sheet1']
-        row = sh.max_row
+        #下面用来计算excel中的有效行数,不能直接用max_row
+        row = 0
+        for i in wb.active:
+            if not all([cell.value == None for cell in i]):
+                row += 1
         column = sh.max_column
         features = [[0 for i in range(featureNum)] for j in range(row)]
         label = [0 for i in range(row)]

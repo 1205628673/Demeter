@@ -9,9 +9,8 @@ db = SQLAlchemy(app)
 class FileMapper(db.Model):
     __tablename__ = 'filemapper'
     id = db.Column(db.Integer, primary_key = True)
-    path = db.Column(db.String)
-
+    path = db.Column(db.String(255))
     def __repr__(self):
-        print('path : {}'.format(path))
+        return '<Role {}> '.format(self.path)
     
     
