@@ -149,12 +149,12 @@ class SvrRegression(Regression):
         super().__init__()
         self.model = SVR(kernel='linear', gamma=0.1)
 class PlsrBpnnRegression():
-    def __init__(self,plsr = None,bpnn = None):
-        self.loadCombinedModel()
-    def loadCombinedModel(self):
-        with open('bpnn-linear.pickle','rb') as f:
+    def __init__(self, bpnn, plsr):
+        self.loadCombinedModel(bpnn, plsr)
+    def loadCombinedModel(self, bpnnModel = 'bpnn-linear.pickle', plsrModel = 'plsr-linear.pickle'):
+        with open(bpnnModel,'rb') as f:
             self.bpnn = pickle.load(f)
-        with open('plsr-linear.pickle','rb') as f:
+        with open(plsrModel,'rb') as f:
             self.plsr = pickle.load(f)
     def predict(self,plsrFeatures,plsrLabels,bpnnFeatures,bpnnLabels):
         plsrPredict = self.plsr.predict(plsrFeatures).flatten()
@@ -258,7 +258,7 @@ class Processing:
                 facArr.append(fac)
             #画图
             plt.plot(modelArr, facArr,color = 'black', label = 'Appear probability',LineWidth = 0.5)
-        plt.title('esample appear probability in model')
+        plt.title('sample appear probability in model')
         plt.xlabel('model')
         plt.ylabel('fac')
         #画出每个样本在累计到第50个样本时的Fac值
@@ -276,7 +276,6 @@ class Processing:
         plt.plot(sampleArr, facArr, LineWidth = 0.5)
         plt.xlabel('sample number')
         plt.ylabel('fac')
-        plt.show()
         for i in range(len(facArr)):
             if facArr[i] >= 100:
                 #标出与其他样本有显著差异的异常样本
@@ -284,6 +283,7 @@ class Processing:
                 #移除异常样本
                 del features[i]
                 del labels[i]
+        plt.show()
         return features,labels
 
     def searchSample(self, x, x_train):
@@ -509,7 +509,7 @@ class Draw:
     def drawCombinedPredict(self):
         bpnnFeatures,bpnnLabels = self.loadFeature('bpnn-individual.txt')
         plsrFeatures,plsrLabels = self.loadFeature('plsr-individual.txt')
-        plsrBpnn = PlsrBpnnRegression()
+        plsrBpnn = PlsrBpnnRegression(bpnn='bpnn-linear.pickle',plsr='plsr-linear.pickle')
         preds = plsrBpnn.predict(plsrFeatures, plsrLabels, bpnnFeatures, bpnnLabels)
         rmse = mean_squared_error(bpnnLabels,preds) ** 0.5
         mase = mean_absolute_error(bpnnLabels,preds)
@@ -524,8 +524,8 @@ class Draw:
         plt.show()
     def drawFit(self):
         x_train,x_test,y_train,y_test = train_test_split(self.features,self.label)
-        #x_test = self.features
-        #y_test = self.label
+        x_test = self.features
+        y_test = self.label
         preds = self.model.predict(x_test)
         rmse = mean_squared_error(y_test,preds) ** 0.5
         mase = mean_absolute_error(y_test,preds)
@@ -578,11 +578,12 @@ class Draw:
         plt.boxplot(boxData,labels = boxLabels,widths = 0.5)
         plt.show()
 if __name__ == '__main__':
+    '''
     ga = GA()
-    ga.modelFile = 'stacking-linear.pickle'
-    ga.xlsFile = 'stacking-dimension-reduce.xlsx'
-    ga.individualFile = 'stacking-individual.txt'
-    ga.cls = StackingRegression()
+    ga.modelFile = 'svr-linear.pickle'
+    ga.xlsFile = 'svr-dimension-reduce.xlsx'
+    ga.individualFile = 'svr-individual.txt'
+    ga.cls = SvrRegression()
     ga.evolution()
     '''
     bpnnDraw = Draw('bpnn-linear.pickle', 'bpnn-individual.txt')
@@ -593,5 +594,6 @@ if __name__ == '__main__':
     svrDraw.drawFit()
     plsrDraw = Draw('plsr-linear.pickle', 'plsr-individual.txt')
     plsrDraw.drawFit()
-    bpnnDraw.model = PlsrBpnnRegression()
-    bpnnDraw.drawCombinedPredict()'''
+    bpnnDraw.model = PlsrBpnnRegression('bpnn-linear.pickle', 'plsr-linear.pickle')
+    bpnnDraw.drawCombinedPredict()
+    

@@ -38,13 +38,13 @@ def upload():
 @app.route('/level', methods = ['GET', 'POST'])
 def level():
     fid = request.args.get('fid')
-
     if fid != None:
-        #fileMapper = metadata.FileMapper.query.filter_by(id=fid).first()
-        #path = fileMapper.path
+        fileMapper = metadata.FileMapper.query.filter_by(id=fid).first()
+        path = fileMapper.path
         drawer = gabp.Draw('../bpnn-linear.pickle', '../bpnn-individual.txt')
         drawer.featuresPath = path
         features, labels = drawer.loadFeature('../bpnn-individual.txt')
-
+        plsrbpnn = gabp.PlsrBpnnRegression('../bpnn-linear.pickle', '../plsr-linear.pickle')
+    return 'success'
 if __name__ == '__main__':
     app.run()
