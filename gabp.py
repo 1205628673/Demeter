@@ -72,7 +72,7 @@ class Classification:
             else:
                 self.features_y[r - 1] = 5
         processor = Processing()
-        self.features_x, self.features_y = processor.abnormalElimination(self.features_x,self.features_y)
+        #self.features_x, self.features_y = processor.abnormalElimination(self.features_x,self.features_y)
     def reduceDimension(self,individual):
         #根据GA遗传算法的个体来降低维度
         dimension = 0
@@ -122,7 +122,7 @@ class Regression(Classification):
             labelIndex = column
             self.features_y[r - 1] = sh.cell(row = r,column = labelIndex).value
         processor = Processing()
-        self.features_x, self.features_y = processor.abnormalElimination(self.features_x,self.features_y)
+        #self.features_x, self.features_y = processor.abnormalElimination(self.features_x,self.features_y)
         #self.features_X = processor.stander(self.features_x) #标准化
         self.features_X = processor.normalizer(self.features_x) #归一化
 class StackingRegression(Regression):
@@ -289,7 +289,7 @@ class Processing:
                 #移除异常样本
                 del features[i]
                 del labels[i]
-        plt.show()
+        #plt.show()
         return features,labels
 
     def searchSample(self, x, x_train):

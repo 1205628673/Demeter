@@ -6,6 +6,7 @@ from flask_cors import *
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 import os
+import numpy as np
 import sys
 sys.path.append('..') #添加上层路径
 import gabp
@@ -15,7 +16,37 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:root@127.0.0.1:3306/demete
 app.config['SQLALCHEMY_TRACK_MODIFICATION'] = True
 db = SQLAlchemy(app)
 CORS(app, reources='/*')
-
+def regressionResultWarpper(preds, labels):
+    #回归结果包装函数
+    rmse = mean_squared_error(labels,preds) ** 0.5
+    mase = mean_absolute_error(labels,preds)
+    level = 0
+    levelArr = []
+    print(preds)
+    for p in preds:
+        if p > 40:
+            level = '一级 (%d > 40 g/kg-1)'
+        elif p >= 30:
+            level = '二级 (40 > %d > 30 g/kg-1)'
+        elif p >= 20:
+            level = '三级 (30 > %d > 20 g/kg-1)'
+        elif p >= 10:
+            level = '四级 (20 > %d > 10 g/kg-1)'
+        elif P >= 6:
+            level = '五级 (10 > %d > 6 g/kg-1)'
+        else:
+            level = '六级 (%d < 6 g/kg-1)'
+        levelArr.append(level)
+    result = {
+        'code' : '200',
+        'message' : 'ok',
+        'preds' : preds,
+        'levels' : levelArr,
+        'labels' : labels ,
+        'rmse' : rmse,
+        'mase' : mase
+    }
+    return result
 @app.route('/', methods = ['GET', 'POST'])
 def hello():
     return 'Hello world!'
@@ -41,8 +72,61 @@ def upload():
             'message':'Invalid method'
         }
     return jsonify(result)
-@app.route('/guide', methods = ['GET', 'POST'])
-def guide():
+def plsrguide():
+    #PLSR模型回归
+    fid = request.args.get('fid')
+    if fid != None:
+        fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
+        path = fileMapper.path
+        drawer = gabp.Draw('../plsr-linear.pickle', '../plsr-individual.txt')
+        drawer.featuresPath = path
+        features, labels = drawer.loadFeature('../plsr-individual.txt')
+        regressor = drawer.model
+        preds = regressor.predict(features)
+        result = regressionResultWarpper(preds.flatten().tolist(), labels)
+        return result
+    result = {
+        'code' : 404,
+        'massage' : 'null filemapper id'
+    }
+    return result
+def bpnnguide():
+    #bpnn模型回归
+    fid = request.args.get('fid')
+    if fid != None:
+        fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
+        path = fileMapper.path
+        drawer = gabp.Draw('../bpnn-linear.pickle', '../bpnn-individual.txt')
+        drawer.featuresPath = path
+        features, labels = drawer.loadFeature('../bpnn-individual.txt')
+        regressor = drawer.model
+        preds = regressor.predict(features)
+        result = regressionResultWarpper(preds.tolist(), labels)
+        return result
+    result = {
+        'code' : 404,
+        'massage' : 'null filemapper id'
+    }
+    return result
+def svrguide():
+    #svr模型回归
+    fid = request.args.get('fid')
+    if fid != None:
+        fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
+        path = fileMapper.path
+        drawer = gabp.Draw('../svr-linear.pickle', '../svr-individual.txt')
+        drawer.featuresPath = path
+        features, labels = drawer.loadFeature('../svr-individual.txt')
+        regressor = drawer.model
+        preds = regressor.predict(features)
+        result = regressionResultWarpper(preds.tolist(), labels)
+        return result
+    result = {
+        'code' : 404,
+        'massage' : 'null filemapper id'
+    }
+    return result
+def bpguide():
     #根据回归模型指导土地营养程度分类
     fid = request.args.get('fid')
     if fid != None:
@@ -59,54 +143,27 @@ def guide():
         #加载PLSR-BPNN联合回归模型
         plsrbpnnRegressor = gabp.PlsrBpnnRegression('../bpnn-linear.pickle', '../plsr-linear.pickle')
         preds = plsrbpnnRegressor.predict(plsrFeatures, plsrLabels, bpnnFeatures, bpnnLabels)
-        #这里的bpnnLabels标签就是现实观测值
-        rmse = mean_squared_error(bpnnLabels,preds) ** 0.5
-        mase = mean_absolute_error(bpnnLabels,preds)
-        level = 0
-        levelArr = []
-        for p in preds:
-            if p > 40:
-                level = '一级 (%d > 40 g/kg-1)'
-            elif p >= 30:
-                level = '二级 (40 > %d > 30 g/kg-1)'
-            elif p >= 20:
-                level = '三级 (30 > %d > 20 g/kg-1)'
-            elif p >= 10:
-                level = '四级 (20 > %d > 10 g/kg-1)'
-            elif P >= 6:
-                level = '五级 (10 > %d > 6 g/kg-1)'
-            else:
-                level = '六级 (%d < 6 g/kg-1)'
-            levelArr.append(level)
-        result = {
-            'code' : '200',
-            'message' : 'ok',
-            'preds' : preds,
-            'levels' : levelArr,
-            'labels' : bpnnLabels ,
-            'rmse' : rmse,
-            'mase' : mase
-        }
+        result = regressionResultWarpper(preds, bpnnLabels)
         return result
     result = {
         'code' : 404,
         'massage' : 'null filemapper id'
     }
     return result
-@app.route('/level', methods = ['GET', 'POST'])
+@app.route('/guide', methods = ['GET', 'POST'])
 def level():
-    #根据选择已经上传的文件有机质浓度进行分级
     fid = request.args.get('fid')
-    if fid != None:
-        fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
-        path = fileMapper.path
-        drawer = gabp.Draw('../bpnn-linear.pickle', '../bpnn-individual.txt')
-        drawer.featuresPath = path
-        features, labels = drawer.loadFeature('../bpnn-individual.txt')
-    result = {
-        'code' : 404,
-        'massage' : 'null filemapper id'
-    }
-    return result
+    regressor = request.args.get('regressor')
+    if regressor == 'plsr':
+        result = plsrguide()
+    elif regressor == 'bpnn':
+        result = bpnnguide()
+    elif regressor == 'bp':
+        result = bpguide()
+    elif regressor == 'svr':
+        result = svrguide()
+    else:
+        result = {'code':404, 'message':'not that %sregressor'%regressor}
+    return jsonify(result)
 if __name__ == '__main__':
     app.run()
