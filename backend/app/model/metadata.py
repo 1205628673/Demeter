@@ -11,6 +11,8 @@ class FileMapper(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     path = db.Column(db.String(255))
     def __repr__(self):
-        return '<Role {}> '.format(self.path)
+        return self.path
+
+
     
     

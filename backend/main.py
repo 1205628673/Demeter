@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify,make_response
 from flask import Flask,render_template,request,redirect,url_for
 from app.model import metadata
 from flask_sqlalchemy import SQLAlchemy
@@ -15,14 +15,12 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:root@127.0.0.1:3306/demeter'
 app.config['SQLALCHEMY_TRACK_MODIFICATION'] = True
 db = SQLAlchemy(app)
-CORS(app, reources='/*')
 def regressionResultWarpper(preds, labels):
     #回归结果包装函数
     rmse = mean_squared_error(labels,preds) ** 0.5
     mase = mean_absolute_error(labels,preds)
     level = 0
     levelArr = []
-    print(preds)
     for p in preds:
         if p > 40:
             level = '一级 (%d > 40 g/kg-1)'
@@ -32,7 +30,7 @@ def regressionResultWarpper(preds, labels):
             level = '三级 (30 > %d > 20 g/kg-1)'
         elif p >= 10:
             level = '四级 (20 > %d > 10 g/kg-1)'
-        elif P >= 6:
+        elif p >= 6:
             level = '五级 (10 > %d > 6 g/kg-1)'
         else:
             level = '六级 (%d < 6 g/kg-1)'
@@ -40,11 +38,13 @@ def regressionResultWarpper(preds, labels):
     result = {
         'code' : '200',
         'message' : 'ok',
-        'preds' : preds,
-        'levels' : levelArr,
-        'labels' : labels ,
-        'rmse' : rmse,
-        'mase' : mase
+        'data' : {
+            'preds' : preds,
+            'levels' : levelArr,
+            'labels' : labels ,
+            'rmse' : rmse,
+            'mase' : mase
+        }
     }
     return result
 @app.route('/', methods = ['GET', 'POST'])
@@ -165,5 +165,18 @@ def level():
     else:
         result = {'code':404, 'message':'not that %sregressor'%regressor}
     return jsonify(result)
+@app.route('/findall', methods = ['GET', 'POST', 'OPTIONS'])
+def findall():
+    fileMappers = metadata.FileMapper.query.all()
+    data = []
+    for f in fileMappers:
+        data.append({'id':f.id, 'path':f.path})
+    result = {
+        'code' : 200,
+        'massage' : 'ok',
+        'data':data
+    }
+    return jsonify(result)
 if __name__ == '__main__':
     app.run()
+    CORS(app)
