@@ -100,7 +100,7 @@ import {get} from '../request/http'
                     let myLineChart = this.$echarts.init(document.getElementById('myLine'))
                     // 绘制图表
                     myLineChart.setOption({
-                        title: { text: 'rmse '+this.rmse+'\nmase '+this.mase +'\n'},
+                        title: { text: 'rmse '+this.rmse+'\nmase '+this.mase +'\n' + regressor +'回归'},
                         tooltip: {},
                         legend: {
                             data: ['observe', 'predict']

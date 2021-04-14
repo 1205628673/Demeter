@@ -1,23 +1,37 @@
 <template>
   <div id="app">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
-    <SimpleTable />
+    <el-header>
+    <el-menu :default-active="activeIndex" class="el-menu-demo" mode="horizontal" @select="handleSelect" router>
+      <el-menu-item index='/upload'>Demeter</el-menu-item>
+      <el-menu-item index="/index">处理中心</el-menu-item>
+    </el-menu>
+  </el-header>
+  <router-view />
   </div>
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
-import SimpleTable from './components/SimpleTable.vue'
 
 export default {
   name: 'App',
-  components: {
-    HelloWorld,
-    SimpleTable
+  data() {
+    return {
+      activeIndex : '1'
+    };
+  },
+  methods:{
+    handleSelect(key, path) {
+      console.log(key,path)
+      this.activeIndex = key
+    }
   }
 }
 </script>
 
 <style>
-
+*{
+  margin:0;
+  padding:0;
+  border:0;
+}
 </style>

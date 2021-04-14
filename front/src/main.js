@@ -3,10 +3,21 @@ import App from './App.vue'
 import ElementUI from 'element-ui';
 import 'element-ui/lib/theme-chalk/index.css';
 import axios from 'axios'
+import VueRouter from 'vue-router'
 import echarts from 'echarts'
+import simpleTable from './components/SimpleTable.vue'
+import upload from './components/Upload.vue'
 Vue.config.productionTip = false
 Vue.use(ElementUI)
+Vue.use(VueRouter)
 Vue.prototype.$echarts = echarts
+const routes = [
+    { path : '/index', component : simpleTable },
+    { path : '/upload', component : upload}
+]
+const router = new VueRouter({
+      routes: routes
+})
 axios.interceptors.response.use(response => {
   if (response.status == 200) {
     return Promise.resolve(response)
@@ -17,4 +28,5 @@ axios.interceptors.response.use(response => {
 })
 new Vue({
   render: h => h(App),
+  router:router
 }).$mount('#app')
