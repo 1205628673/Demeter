@@ -28,12 +28,13 @@
     </el-table-column>
     </el-table>
     <el-dialog
-        title="回归图"
         :visible.sync="dialogVisible"
+        @close="closeDialog"
         width="60%">
-        <canvas id='myCanvas' style='width:600px;height:400px;maring-top:100px'/>
+        <div id='myLine' style='height:500px;'/>
+        <div id='myPoint' style='height:500px;'/>
         <span slot="footer" class="dialog-footer">
-            <el-button type="primary" @click="dialogVisible = false">确 定</el-button>
+            <el-button type="primary" @click="closeDialog">确 定</el-button>
         </span>
     </el-dialog>
     </div>
@@ -53,8 +54,17 @@ import {get} from '../request/http'
             };
         },
         methods:{
-            rowStyle(){
+            rowStyle() {
                 return "text-align:center"
+            },
+            closeDialog() {
+                this.dialogVisible = false
+                this.preds = []
+                this.labels = []
+                this.mase = 0
+                this.rmse = 0
+                this.level = 0
+                
             },
             guide(e, regressor) {
                 var id = e.id
@@ -66,7 +76,56 @@ import {get} from '../request/http'
                     this.mase = data.mase
                     this.rmse = data.rmse
                     this.level = data.level
-                
+                    var number = []
+                    for(let i = 0;i < this.preds;i++) {
+                        number.push(i)
+                    }
+                    var pointArr = new Array(this.preds.length)
+                    for(let j =0;j < pointArr.length;j++) {
+                        pointArr[j] = new Array(2)
+                    }
+                    for(let i = 0;i<this.preds.length;i++) {
+                        pointArr[i] = [this.preds[i], this.labels[i]]
+                    }
+                    let myPointChart = this.$echarts.init(document.getElementById('myPoint'))
+                    myPointChart.setOption({
+                        xAxis: {name: 'predict value'},
+                        yAxis: {name: 'observe value'},
+                        series: [{
+                            symbolSize: 10,
+                            data: pointArr,
+                            type: 'scatter'
+                        }]
+                    })
+                    let myLineChart = this.$echarts.init(document.getElementById('myLine'))
+                    // 绘制图表
+                    myLineChart.setOption({
+                        title: { text: 'rmse '+this.rmse+'\nmase '+this.mase +'\n'},
+                        tooltip: {},
+                        legend: {
+                            data: ['observe', 'predict']
+                        },
+                        xAxis: {
+                            data: number,
+                            name: 'number of sample'
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: 'som value'
+                        },
+                        series: [
+                            {
+                                name: 'observe',
+                                type: 'line',
+                                data: this.labels
+                            },
+                            {
+                                name: 'predict',
+                                type: 'line',
+                                data: this.preds
+                            }
+                        ]
+                    });
                 })
             }
         },
