@@ -48,8 +48,6 @@ import {get} from '../request/http'
                 dialogVisible:false,
                 preds : [],
                 labels : [],
-                mase : 0,
-                rmse : 0,
                 level : 0
             };
         },
@@ -61,8 +59,6 @@ import {get} from '../request/http'
                 this.dialogVisible = false
                 this.preds = []
                 this.labels = []
-                this.mase = 0
-                this.rmse = 0
                 this.level = 0
                 
             },
@@ -73,8 +69,6 @@ import {get} from '../request/http'
                     let data = res.data
                     this.preds = data.preds
                     this.labels = data.labels
-                    this.mase = data.mase
-                    this.rmse = data.rmse
                     this.level = data.level
                     var number = []
                     for(let i = 0;i < this.preds;i++) {
@@ -85,12 +79,12 @@ import {get} from '../request/http'
                         pointArr[j] = new Array(2)
                     }
                     for(let i = 0;i<this.preds.length;i++) {
-                        pointArr[i] = [this.preds[i], this.labels[i]]
+                        pointArr[i] = [i, this.preds[i]]
                     }
                     let myPointChart = this.$echarts.init(document.getElementById('myPoint'))
                     myPointChart.setOption({
                         xAxis: {name: 'predict value'},
-                        yAxis: {name: 'observe value'},
+                        yAxis: {name: 'number of sample'},
                         series: [{
                             symbolSize: 10,
                             data: pointArr,
@@ -100,7 +94,7 @@ import {get} from '../request/http'
                     let myLineChart = this.$echarts.init(document.getElementById('myLine'))
                     // 绘制图表
                     myLineChart.setOption({
-                        title: { text: 'rmse '+this.rmse+'\nmase '+this.mase +'\n' + regressor +'回归'},
+                        title: { text:  regressor +'回归'},
                         tooltip: {},
                         legend: {
                             data: ['observe', 'predict']

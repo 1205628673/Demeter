@@ -17,8 +17,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATION'] = True
 db = SQLAlchemy(app)
 def regressionResultWarpper(preds, labels):
     #回归结果包装函数
-    rmse = mean_squared_error(labels,preds) ** 0.5
-    mase = mean_absolute_error(labels,preds)
     level = 0
     levelArr = []
     for p in preds:
@@ -41,9 +39,7 @@ def regressionResultWarpper(preds, labels):
         'data' : {
             'preds' : preds,
             'levels' : levelArr,
-            'labels' : labels ,
-            'rmse' : rmse,
-            'mase' : mase
+            'labels' : labels 
         }
     }
     return result
@@ -117,6 +113,7 @@ def svrguide():
         drawer = gabp.Draw('../svr-linear.pickle', '../svr-individual.txt')
         drawer.featuresPath = path
         features, labels = drawer.loadFeature('../svr-individual.txt')
+        labels = [] #取消标签
         regressor = drawer.model
         preds = regressor.predict(features)
         result = regressionResultWarpper(preds.tolist(), labels)
