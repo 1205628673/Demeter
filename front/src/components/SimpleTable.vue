@@ -1,7 +1,7 @@
 <template>
     <div class='container'>
     <el-table
-    :data="tableData"
+    :data="tableData.filter(data => !data.filename || data.filename.toLowerCase().includes(search.toLowerCase()))"
     style="width: 100%;"
     :cell-style="rowStyle">
     <el-table-column
@@ -26,13 +26,33 @@
             <el-button type="success" @click='guide(scope.row, "bp")'>BPNN-PLSR回归</el-button>
         </template>
     </el-table-column>
+    <el-table-column>
+    <!-- eslint-disable -->
+        <template slot="header" slot-scope="scope">
+            <el-input 
+                v-model='search'
+                size='mini'
+                placeholder='文件名'/>
+        </template>
+    </el-table-column>
     </el-table>
+    <div class='pagediv'>
+        <el-pagination
+        background
+        layout="prev, pager, next"
+        :total='this.total'
+        :current-page='this.page'
+        @current-change='changePage'
+        :page-size='this.pageSize'>
+        </el-pagination>
+    </div>
     <el-dialog
         :visible.sync="dialogVisible"
         @close="closeDialog"
         width="60%">
         <div id='myLine' style='height:500px;'/>
         <div id='myPoint' style='height:500px;'/>
+        <el-button type="info" @click="gotoDetail">查看样本</el-button>
         <span slot="footer" class="dialog-footer">
             <el-button type="primary" @click="closeDialog">确 定</el-button>
         </span>
@@ -48,8 +68,14 @@ import {get} from '../request/http'
                 dialogVisible:false,
                 preds : [],
                 labels : [],
-                level : 0
-            };
+                page : 1,
+                total : 0,
+                pageSize : 0,
+                level : 0,
+                dialogFid : 0,
+                dialogRegressor : '',
+                search:''
+            }
         },
         methods:{
             rowStyle() {
@@ -59,12 +85,35 @@ import {get} from '../request/http'
                 this.dialogVisible = false
                 this.preds = []
                 this.labels = []
-                this.level = 0
-                
+                this.level = 0  
+            },
+            gotoDetail() {
+                this.$router.push({path:'/sampledetail', query:{fid:this.dialogFid, regressor:this.dialogRegressor}})
+            },
+            findall(page) {
+                get('/api/findall', {'page':page}).then(res => {
+                    if(res.code == 200) {
+                        var fileMappers = res.data
+                        this.page = res.page
+                        this.total = res.total
+                        this.pageSize = res.pageSize
+                        for(var i =0; i < fileMappers.length;i++) {
+                            var d = {filename:fileMappers[i].filename, id:fileMappers[i].id}
+                            this.tableData.push(d)
+                        }
+                    } else{
+                        this.$message.error(res.message);
+                    }
+                })
+            },
+            changePage(page) {
+                this.findall(page)
             },
             guide(e, regressor) {
                 var id = e.id
                 this.dialogVisible = true
+                this.dialogFid = e.id
+                this.dialogRegressor = regressor
                 get('/api/guide',{'fid':id,'regressor':regressor}).then(res => {
                     let data = res.data
                     this.preds = data.preds
@@ -124,17 +173,14 @@ import {get} from '../request/http'
             }
         },
         mounted() {
-            get('/api/findall').then(res => {
-                if(res.code == 200) {
-                    var fileMappers = res.data
-                    for(var i =0; i < fileMappers.length;i++) {
-                        var d = {filename:fileMappers[i].path, id:fileMappers[i].id}
-                        this.tableData.push(d)
-                    }
-                } else{
-                    this.$message.error(res.message);
-                }
-            })
+            this.findall(1)
         }
     }
 </script>
+<style>
+.pagediv{
+    display:flex;
+    justify-content:center;
+    margin:20px;
+}
+</style>

@@ -6,8 +6,10 @@ from flask_cors import *
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 import os
+import time
 import numpy as np
 import sys
+from hashlib import md5
 sys.path.append('..') #添加上层路径
 import gabp
 
@@ -50,8 +52,17 @@ def hello():
 def upload():
     if request.method == 'POST':
         f = request.files.get('file')
+        filename = f.filename
+        if not(filename.endswith('.xls') or filename.endswith('.xlsx')):
+            return jsonify({
+                'code':500,
+                'message':'invalid file extension'
+            })
+        extension = '.' + filename.split(".")[1]
+        timesuffex = str(time.time())
+        md5Name = md5(filename.encode('utf8') + bytes(timesuffex,'utf8')).hexdigest() + extension
         basepath = 'D:\\pyProjects\\Demeter\\upload'
-        uploadpath = os.path.join(basepath, f.filename)
+        uploadpath = os.path.join(basepath, md5Name)
         f.save(uploadpath)
         result = {
             'code':200,
@@ -59,24 +70,24 @@ def upload():
         }
         fileMapper = metadata.FileMapper()
         fileMapper.path = uploadpath
-        print(uploadpath)
+        fileMapper.filename = filename
         db.session.add(fileMapper)
         db.session.commit()
         return jsonify(result)
-    result = {
+        result = {
             'code':503,
             'message':'Invalid method'
         }
     return jsonify(result)
-def plsrguide():
+def plsrguide(fid):
     #PLSR模型回归
-    fid = request.args.get('fid')
     if fid != None:
         fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
         path = fileMapper.path
         drawer = gabp.Draw('../plsr-linear.pickle', '../plsr-individual.txt')
         drawer.featuresPath = path
         features, labels = drawer.loadFeature('../plsr-individual.txt')
+        labels = [] #取消标签
         regressor = drawer.model
         preds = regressor.predict(features)
         result = regressionResultWarpper(preds.flatten().tolist(), labels)
@@ -86,15 +97,15 @@ def plsrguide():
         'massage' : 'null filemapper id'
     }
     return result
-def bpnnguide():
+def bpnnguide(fid):
     #bpnn模型回归
-    fid = request.args.get('fid')
     if fid != None:
         fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
         path = fileMapper.path
         drawer = gabp.Draw('../bpnn-linear.pickle', '../bpnn-individual.txt')
         drawer.featuresPath = path
         features, labels = drawer.loadFeature('../bpnn-individual.txt')
+        labels = [] #取消标签
         regressor = drawer.model
         preds = regressor.predict(features)
         result = regressionResultWarpper(preds.tolist(), labels)
@@ -104,9 +115,8 @@ def bpnnguide():
         'massage' : 'null filemapper id'
     }
     return result
-def svrguide():
+def svrguide(fid):
     #svr模型回归
-    fid = request.args.get('fid')
     if fid != None:
         fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
         path = fileMapper.path
@@ -123,9 +133,8 @@ def svrguide():
         'massage' : 'null filemapper id'
     }
     return result
-def bpguide():
+def bpguide(fid):
     #根据回归模型指导土地营养程度分类
-    fid = request.args.get('fid')
     if fid != None:
         fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
         path = fileMapper.path
@@ -139,7 +148,9 @@ def bpguide():
         plsrFeatures, plsrLabels = plsrDrawer.loadFeature('../plsr-individual.txt')
         #加载PLSR-BPNN联合回归模型
         plsrbpnnRegressor = gabp.PlsrBpnnRegression('../bpnn-linear.pickle', '../plsr-linear.pickle')
-        preds = plsrbpnnRegressor.predict(plsrFeatures, plsrLabels, bpnnFeatures, bpnnLabels)
+        plsrbpnnRegressor.k1File = '../k1.txt'
+        plsrbpnnRegressor.k2File = '../k2.txt'
+        preds = plsrbpnnRegressor.predict(plsrFeatures, bpnnFeatures)
         result = regressionResultWarpper(preds, bpnnLabels)
         return result
     result = {
@@ -147,31 +158,89 @@ def bpguide():
         'massage' : 'null filemapper id'
     }
     return result
+def saveSoilSample(fid, preds, regressor):
+    #如果库中没有该excel文件的样本数据则存库
+        samples = metadata.SoilSample.query.filter_by(fid = fid, regressor=regressor).first()
+        print(samples)
+        if samples == None:
+            samples = []
+            for i in range(len(preds)):
+                soilSample = metadata.SoilSample()
+                soilSample.fid = fid
+                soilSample.sid = i
+                soilSample.som_value = preds[i]
+                soilSample.regressor = regressor
+                samples.append(soilSample)
+            try:
+                db.session.add_all(samples)
+                db.session.commit()
+            except:
+                db.session.rollback()
+            finally:
+                db.session.close()
+@app.route('/findsample', methods = ['GET', 'POST'])
+def findSample():
+    fid = request.args.get('fid')
+    page = int(request.args.get('page'))
+    pageSize = 20
+    regressor = request.args.get('regressor')
+    paginateObj = metadata.SoilSample.query.filter_by(fid = fid, regressor = regressor).paginate(page, pageSize, error_out = False)
+    samples = paginateObj.items
+    total = paginateObj.total
+    currentPage = paginateObj.page
+    data = []
+    for s in samples:
+        data.append({
+            'id':s.id,
+            'fid':s.fid,
+            'sid':s.sid + 1,
+            'somValue':s.som_value,
+            'regressor':s.regressor
+        })
+    result = {
+        'code' : 200,
+        'massage' : 'ok',
+        'data':data,
+        'page':currentPage,
+        'total':total,
+        'pageSize':pageSize
+    }
+    return result
 @app.route('/guide', methods = ['GET', 'POST'])
 def level():
     fid = request.args.get('fid')
     regressor = request.args.get('regressor')
-    if regressor == 'plsr':
-        result = plsrguide()
-    elif regressor == 'bpnn':
-        result = bpnnguide()
-    elif regressor == 'bp':
-        result = bpguide()
-    elif regressor == 'svr':
-        result = svrguide()
+    if regressor in ['plsr', 'bpnn', 'bp', 'svr']:
+        if regressor == 'plsr':
+            result = plsrguide(fid)
+        elif regressor == 'bpnn':
+            result = bpnnguide(fid)
+        elif regressor == 'bp':
+            result = bpguide(fid)
+        elif regressor == 'svr':
+            result = svrguide(fid)
+        saveSoilSample(fid, result['data']['preds'], regressor)
     else:
         result = {'code':404, 'message':'not that %sregressor'%regressor}
     return jsonify(result)
 @app.route('/findall', methods = ['GET', 'POST', 'OPTIONS'])
 def findall():
-    fileMappers = metadata.FileMapper.query.all()
+    page = int(request.args.get('page'))
+    pageSize = 10
+    paginateObj = metadata.FileMapper.query.paginate(page, pageSize, error_out = False)
+    fileMappers = paginateObj.items
+    total = paginateObj.total
+    currentPage = paginateObj.page
     data = []
     for f in fileMappers:
-        data.append({'id':f.id, 'path':f.path})
+        data.append({'id':f.id, 'filename':f.filename})
     result = {
         'code' : 200,
         'massage' : 'ok',
-        'data':data
+        'data':data,
+        'page':currentPage,
+        'total':total,
+        'pageSize':pageSize
     }
     return jsonify(result)
 if __name__ == '__main__':

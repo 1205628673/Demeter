@@ -5,6 +5,7 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+import os
 from sklearn.svm import SVR
 from sklearn import preprocessing
 from sklearn.neural_network import MLPRegressor
@@ -52,8 +53,13 @@ class Classification:
     def readFeature(self):
         wb = openpyxl.load_workbook('D:\\soil-feature.xlsx')
         sh = wb['Sheet1']
+        row = 0
+        for i in wb.active:
+            if not all([cell.value == None for cell in i]):
+                row += 1
+        column = sh.max_column
         for r in range(1,row + 1):
-            for c in range(1,self.column):
+            for c in range(1,column):
                 data = sh.cell(row = r,column = c)
                 self.features_x[r - 1][c - 1] = data.value
             labelIndex = column
@@ -72,7 +78,7 @@ class Classification:
             else:
                 self.features_y[r - 1] = 5
         processor = Processing()
-        #self.features_x, self.features_y = processor.abnormalElimination(self.features_x,self.features_y)
+        self.features_x, self.features_y = processor.abnormalElimination(self.features_x,self.features_y)
     def reduceDimension(self,individual):
         #根据GA遗传算法的个体来降低维度
         dimension = 0
@@ -157,12 +163,14 @@ class SvrRegression(Regression):
 class PlsrBpnnRegression():
     def __init__(self, bpnn, plsr):
         self.loadCombinedModel(bpnn, plsr)
+        self.k1File = 'k1.txt'
+        self.k2File = 'k2.txt'
     def loadCombinedModel(self, bpnnModel = 'bpnn-linear.pickle', plsrModel = 'plsr-linear.pickle'):
         with open(bpnnModel,'rb') as f:
             self.bpnn = pickle.load(f)
         with open(plsrModel,'rb') as f:
             self.plsr = pickle.load(f)
-    def predict(self,plsrFeatures,plsrLabels,bpnnFeatures,bpnnLabels):
+    def train(self,plsrFeatures,plsrLabels,bpnnFeatures,bpnnLabels):
         plsrPredict = self.plsr.predict(plsrFeatures).flatten()
         bpnnPredict = self.bpnn.predict(bpnnFeatures).flatten()
         n = len(plsrFeatures)
@@ -188,7 +196,22 @@ class PlsrBpnnRegression():
         SB = EB * (1 - sigSB)
         k1 = SP / (SP + SB)
         k2 = SB / (SP + SB)
+        with open(self.k1File,'w') as f:
+            f.write(str(k1))
+        with open(self.k2File, 'w') as f:
+            f.write(str(k2))
+    def predict(self, plsrFeatures, bpnnFeatures):
+        plsrPredict = self.plsr.predict(plsrFeatures).flatten()
+        bpnnPredict = self.bpnn.predict(bpnnFeatures).flatten()
         result = [0 for j in range(len(bpnnFeatures))]
+        k1 = 0
+        k2 = 0
+        if not (os.path.exists(self.k1File) and  os.path.exists(self.k2File)):
+            raise Exception('not train bpnn-plsr model yet')
+        with open(self.k1File) as f:
+            k1 = float(f.read())
+        with open(self.k2File) as f:
+            k2 = float(f.read())
         for i in range(len(result)):
             result[i] = k1 * plsrPredict[i] + k2 * bpnnPredict[i]
         return result
@@ -520,7 +543,8 @@ class Draw:
         bpnnFeatures,bpnnLabels = self.loadFeature('bpnn-individual.txt')
         plsrFeatures,plsrLabels = self.loadFeature('plsr-individual.txt')
         plsrBpnn = PlsrBpnnRegression(bpnn='bpnn-linear.pickle',plsr='plsr-linear.pickle')
-        preds = plsrBpnn.predict(plsrFeatures, plsrLabels, bpnnFeatures, bpnnLabels)
+        plsrBpnn.train(plsrFeatures, plsrLabels, bpnnFeatures, bpnnLabels)
+        preds = plsrBpnn.predict(plsrFeatures, bpnnFeatures)
         rmse = mean_squared_error(bpnnLabels,preds) ** 0.5
         mase = mean_absolute_error(bpnnLabels,preds)
         self.loadModel()
@@ -598,8 +622,7 @@ if __name__ == '__main__':
     '''
     bpnnDraw = Draw('bpnn-linear.pickle', 'bpnn-individual.txt')
     bpnnDraw.drawFit()
-    stDraw = Draw('stacking-linear.pickle', 'stacking-individual.txt')
-    stDraw.drawFit()
+    bpnnDraw.drawBox()
     svrDraw = Draw('svr-linear.pickle', 'svr-individual.txt')
     svrDraw.drawFit()
     plsrDraw = Draw('plsr-linear.pickle', 'plsr-individual.txt')

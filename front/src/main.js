@@ -7,13 +7,16 @@ import VueRouter from 'vue-router'
 import echarts from 'echarts'
 import simpleTable from './components/SimpleTable.vue'
 import upload from './components/Upload.vue'
+import sampleDetail from './components/SampleDetail.vue'
 Vue.config.productionTip = false
 Vue.use(ElementUI)
 Vue.use(VueRouter)
 Vue.prototype.$echarts = echarts
 const routes = [
+    { path: '/', component : simpleTable},
     { path : '/index', component : simpleTable },
-    { path : '/upload', component : upload}
+    { path : '/upload', component : upload},
+    { path : '/sampledetail', component : sampleDetail}
 ]
 const router = new VueRouter({
       routes: routes
