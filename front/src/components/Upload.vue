@@ -11,7 +11,7 @@
             :on-error='uploadError'>
             <i class="el-icon-upload"></i>
             <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
-            <div class="el-upload__tip" slot="tip" style='color:white;font-weight:bold;'>只能上传xls/xlsx文件，且不超过500kb</div>
+            <div class="el-upload__tip" slot="tip" style='color:white;font-weight:bold;'>只能上传xls/xlsx文件，且不超过500kb，并且按照要求的样本格式上传</div>
         </el-upload>
         </div>
     </div>

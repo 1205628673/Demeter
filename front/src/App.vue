@@ -4,6 +4,7 @@
     <el-menu :default-active="activeIndex" class="el-menu-demo" mode="horizontal" @select="handleSelect" router>
       <el-menu-item index='/upload'>Demeter</el-menu-item>
       <el-menu-item index="/index">处理中心</el-menu-item>
+      <el-menu-item index="/train">训练中心</el-menu-item>
     </el-menu>
   </el-header>
   <router-view />

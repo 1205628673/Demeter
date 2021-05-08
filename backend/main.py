@@ -5,10 +5,11 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import * 
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import accuracy_score,r2_score
 import os
 import time
 import numpy as np
-import sys
+import sys,math
 from hashlib import md5
 sys.path.append('..') #添加上层路径
 import gabp
@@ -19,6 +20,19 @@ app.config['SQLALCHEMY_TRACK_MODIFICATION'] = True
 db = SQLAlchemy(app)
 def regressionResultWarpper(preds, labels):
     #回归结果包装函数
+    rmse = mean_squared_error(labels,preds) ** 0.5
+    mape = mean_absolute_error(labels,preds)
+    r2 = r2_score(labels, preds)
+    mean_observe_value = 0
+    observe_sum = 0
+    for y in labels:
+        observe_sum = observe_sum + y
+    mean_observe_value = observe_sum / len(labels)
+    sd = 0 #观察值的方差
+    for y in labels:
+        sd = sd + (y - mean_observe_value) ** 2
+    sd = math.sqrt(sd / len(labels))
+    rpd = sd / rmse 
     level = 0
     levelArr = []
     for p in preds:
@@ -41,13 +55,45 @@ def regressionResultWarpper(preds, labels):
         'data' : {
             'preds' : preds,
             'levels' : levelArr,
-            'labels' : labels 
+            'labels' : labels,
+            'rmse' : rmse,
+            'mape' : mape,
+            'r2' : r2,
+            'rpd' : rpd
         }
     }
     return result
 @app.route('/', methods = ['GET', 'POST'])
 def hello():
     return 'Hello world!'
+@app.route('/train', methods=['GET'])
+def train():
+    fid = request.args.get('fid')
+    regressor = request.args.get('regressor')
+    fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
+    filename = fileMapper.filename
+    ga = gabp.GA()
+    if regressor == 'svr':
+        ga.cls = gabp.SvrRegression(filename)
+    elif regressor == 'plsr':
+        ga.cls = gabp.PlsrRegression(filename)
+    elif regressor == 'bpnn':
+        ga.cls = gabp.BpnnRegression(filename)
+    elif regressor == 'bp':
+        ga.cls = gabp.PlsrBpnnRegression(filename)
+    else:
+        return {'message':'找不到模型','code':10002}
+    #设置训练中所选择的特征向量和模型的保存位置
+    timesuffix = str(time.time())
+    md5Name = md5(bytes(timesuffix)).hexdigest()
+    #设置txt格式的individual个体文件
+    ga.individualFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.txt')
+    #设置pickle格式的模型文件
+    ga.modelFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.pickle')
+    #设置xls格式的保留文件
+    ga.xlsFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.xlsx')
+    meanFitnesses,bestFitnesses = ga.evolution()
+    return {'message':'ok','code':200,'data':{'meanFitnesses':meanFitnesses,'bestFitnesses':bestFitnesses}}
 @app.route('/upload', methods = ['GET', 'POST'])
 def upload():
     if request.method == 'POST':
@@ -87,7 +133,7 @@ def plsrguide(fid):
         drawer = gabp.Draw('../plsr-linear.pickle', '../plsr-individual.txt')
         drawer.featuresPath = path
         features, labels = drawer.loadFeature('../plsr-individual.txt')
-        labels = [] #取消标签
+        #labels = [] #取消标签
         regressor = drawer.model
         preds = regressor.predict(features)
         result = regressionResultWarpper(preds.flatten().tolist(), labels)
@@ -105,7 +151,7 @@ def bpnnguide(fid):
         drawer = gabp.Draw('../bpnn-linear.pickle', '../bpnn-individual.txt')
         drawer.featuresPath = path
         features, labels = drawer.loadFeature('../bpnn-individual.txt')
-        labels = [] #取消标签
+        #labels = [] #取消标签
         regressor = drawer.model
         preds = regressor.predict(features)
         result = regressionResultWarpper(preds.tolist(), labels)
@@ -123,7 +169,7 @@ def svrguide(fid):
         drawer = gabp.Draw('../svr-linear.pickle', '../svr-individual.txt')
         drawer.featuresPath = path
         features, labels = drawer.loadFeature('../svr-individual.txt')
-        labels = [] #取消标签
+        #labels = [] #取消标签
         regressor = drawer.model
         preds = regressor.predict(features)
         result = regressionResultWarpper(preds.tolist(), labels)

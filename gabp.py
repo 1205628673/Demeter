@@ -32,15 +32,15 @@ def sigmoid(x):
 def sigmoid_derivative(x):
     return x * (1 - x)
 class Classification:
-    def __init__(self):
+    def __init__(self,filename='D:\\soil-feature.xlsx'):
         self.featureNum = 0
         self.features_x = None #特征值
         self.features_y = None   #特征标签
-        self.initRowColumn()
-        self.readFeature()
+        self.initRowColumn(filename)
+        self.readFeature(filename)
         self.model = None
-    def initRowColumn(self):
-        wb = openpyxl.load_workbook('D:\\soil-feature.xlsx')
+    def initRowColumn(self,filename):
+        wb = openpyxl.load_workbook(filename)
         sh = wb['Sheet1']
         row = 0
         for i in wb.active:
@@ -50,8 +50,8 @@ class Classification:
         self.featureNum = column - 1
         self.features_x = [[0 for i in range(column - 1)] for j in range(row)]
         self.features_y = [0 for i in range(row)]
-    def readFeature(self):
-        wb = openpyxl.load_workbook('D:\\soil-feature.xlsx')
+    def readFeature(self, filename):
+        wb = openpyxl.load_workbook(filename)
         sh = wb['Sheet1']
         row = 0
         for i in wb.active:
@@ -111,10 +111,10 @@ class Classification:
         result = self.model.predict(feature_x_test)
         return result
 class Regression(Classification):
-    def __init__(self):
-        super().__init__()
-    def readFeature(self):
-        wb = openpyxl.load_workbook('D:\\soil-feature.xlsx')
+    def __init__(self,filename='D:\\soil-feature.xlsx'):
+        super().__init__(filename)
+    def readFeature(self,filename):
+        wb = openpyxl.load_workbook(filename)
         sh = wb['Sheet1']
         row = 0
         for i in wb.active:
@@ -128,19 +128,20 @@ class Regression(Classification):
             labelIndex = column
             self.features_y[r - 1] = sh.cell(row = r,column = labelIndex).value
         processor = Processing()
-        #self.features_x, self.features_y = processor.abnormalElimination(self.features_x,self.features_y)
+        #self.features_x, self.features_y = processor.abnormalElimination(self.features_x,self.features_y)#画曲线
         #self.features_X = processor.stander(self.features_x) #标准化
-        self.features_X = processor.normalizer(self.features_x) #归一化
+        #self.features_X = processor.normalizer(self.features_x) #归一化
 class StackingRegression(Regression):
     def __init__(self):
         super().__init__()
         lr = LinearRegression()
-        svr_lin = SVR(kernel='linear')
-        ridge = Ridge(random_state=1)
+        svr_lin = SVR(kernel='linear',gamma=0.1,C=0.1)
+        #ridge = Ridge(random_state=1)
+        plsr = PLSRegression(n_components=15)
         knn = KNeighborsRegressor(n_neighbors=5)
         bpnn = MLPRegressor(solver='lbfgs', alpha=1e-5,
                     hidden_layer_sizes=(26, 15), random_state=1, max_iter=10000)
-        self.model = StackingRegressor(regressors = [lr, svr_lin, ridge, knn], meta_regressor = bpnn)
+        self.model = StackingRegressor(regressors = [bpnn, svr_lin, plsr, knn], meta_regressor = lr)
 class KNNRegression(Regression):
     def __init__(self):
         super().__init__()
@@ -148,8 +149,10 @@ class KNNRegression(Regression):
 class BpnnRegression(Regression):
     def __init__(self):
         super().__init__()
-        self.model = MLPRegressor(solver='lbfgs', alpha=1e-5,
+        self.model = MLPRegressor(solver='lbfgs', alpha=1e-5,activation='relu',
                     hidden_layer_sizes=(26, 15), random_state=1, max_iter=10000)
+        #self.model = MLPRegressor(solver='lbfgs', alpha=1e-5,activation='relu',
+        #            hidden_layer_sizes=(15,), random_state=1, max_iter=10000)
 class PlsrRegression(Regression):
     def __init__(self):
         super().__init__()
@@ -159,7 +162,7 @@ class PlsrRegression(Regression):
 class SvrRegression(Regression):
     def __init__(self):
         super().__init__()
-        self.model = SVR(kernel='linear', gamma=0.1)
+        self.model = SVR(kernel='linear', gamma=0.01, C=0.1)
 class PlsrBpnnRegression():
     def __init__(self, bpnn, plsr):
         self.loadCombinedModel(bpnn, plsr)
@@ -330,8 +333,8 @@ class GA:
         self.individualFit = [] #每一轮的个体拟合度
         self.generation = 100 #代数
         self.populationNum = 100 #种群个体数
-        self.crossConstant = 0.7 #交叉几率
-        self.mutationConstant = 0.2 #变异几率
+        self.crossConstant = 0.6 #交叉几率
+        self.mutationConstant = 0.1 #变异几率
         self.satisfied = 0.88 #适应度满意值
         self.cls = None #分类器初始化
         self.modelFile = 'plsr.pickle'
@@ -351,10 +354,10 @@ class GA:
         #轮盘赌选择方法,通过适应度对比，把适应度低的个体排除
         subPopulation = []
         sumAllFitness = sum(self.individualFit) #所有个体适应度总和
+        present = sumAllFitness / len(self.individualFit)
         for i in range(len(self.individualFit)):
             accurate = self.individualFit[i]
             individual = self.population[i]
-            present = sumAllFitness / len(self.individualFit)
             if accurate > present:
                 #如果该个体的适应度高于平均适应度，则保留该个体,否则淘汰
                 subPopulation.append(individual)
@@ -365,7 +368,7 @@ class GA:
             self.population.extend(self.population[:bound])
         self.individualFit = [] #清空个体适应度列表
         return present #返回该次选择个体函数的平均适应度
-    def fitness(self,individual):
+    def fitness(self,individual,bestFit = False):
         reduceDimensionFeature = self.cls.reduceDimension(individual)
         feature_y = self.cls.features_y
         x_train,x_test,y_train,y_test = train_test_split(reduceDimensionFeature,self.cls.features_y)
@@ -451,7 +454,7 @@ class GA:
         plt.plot([i for i in range(len(bestFitnessArr))], bestFitnessArr)
         plt.xlabel('Generate Round')
         plt.ylabel('Fitness Value')
-        plt.show()
+        #plt.show()
         #如果进化轮次大于设置，则退出方法
         if(roundCount > self.generation):
             return
@@ -486,6 +489,7 @@ class GA:
             f.close()
         except Exception as error:
             print('happen some error in save excel file...,%s' % error)
+        return presentArr,bestFitnessArr
 class Draw:
     def __init__(self,modelFile,individualFile):
         self.model = None
@@ -549,20 +553,44 @@ class Draw:
         mase = mean_absolute_error(bpnnLabels,preds)
         self.loadModel()
         bpnnPreds = self.model.predict(bpnnFeatures)
+        mean_observe_value = 0 #观察值均值
+        observe_sum = 0 #中间值,观察值的和
+        for y in bpnnLabels:
+            observe_sum = observe_sum + y
+        mean_observe_value = observe_sum / len(bpnnLabels)
+        sd = 0 #观察值的方差
+        for y in bpnnLabels:
+            sd = sd + (y - mean_observe_value) ** 2
+        sd = math.sqrt(sd / len(bpnnLabels))
+        rpd = sd / rmse
         plt.figure(figsize=(10,7))
         plt.plot([i for i in range(len(bpnnLabels))], bpnnPreds, 'b--o')
         plt.plot([i for i in range(len(bpnnLabels))], preds,'r--*')
-        plt.title('R^2=%f\nRMSE=%f\nMASE=%f'%(r2_score(bpnnLabels, preds),rmse,mase))
+        plt.title('R^2=%f\nRMSE=%f\nMASE=%f\nRPD=%f'%(r2_score(bpnnLabels, preds),rmse,mase,rpd))
         plt.xlabel('sample number')
         plt.ylabel('predict value')
         plt.show()
-    def drawFit(self):
-        x_train,x_test,y_train,y_test = train_test_split(self.features,self.label)
-        x_test = self.features
-        y_test = self.label
+    def draw(self):
+        x_trian,x_test,y_train,y_test = train_test_split(self.features,self.label)
+        self.drawFit(x_test,y_test)
+    def drawFit(self,x_test,y_test):
+        #x_train,x_test,y_train,y_test = train_test_split(self.features,self.label)
+        #x_test = self.features
+        #y_test = self.label
         preds = self.model.predict(x_test)
         rmse = mean_squared_error(y_test,preds) ** 0.5
         mase = mean_absolute_error(y_test,preds)
+
+        mean_observe_value = 0 #观察值均值
+        observe_sum = 0 #中间值,观察值的和
+        for y in y_test:
+            observe_sum = observe_sum + y
+        mean_observe_value = observe_sum / len(y_test)
+        sd = 0 #观察值的方差
+        for y in y_test:
+            sd = sd + (y - mean_observe_value) ** 2
+        sd = math.sqrt(sd / len(y_test))
+        rpd = sd / rmse
         sig = 0
         #计算平均误差率MAPE
         for i in range(len(preds)):
@@ -578,13 +606,13 @@ class Draw:
         plt.xlabel('sample number')
         plt.ylabel('predict value')
         plt.legend([obs, p], ['observe', 'predict'])
-        plt.title('R^2=%f\nRMSE=%f\nMAPE=%f'%(r2_score(y_test, preds),rmse,mape))
+        plt.title('R^2=%f\nRMSE=%f\nMAPE=%f\nRPD=%f'%(r2_score(y_test, preds),rmse,mape,rpd))
         plt.show()
         #画点图
         plt.figure(figsize=(10,7))
         plt.ylabel('observe value')
         plt.xlabel('predict value')
-        plt.title('R^2=%f\nRMSE=%f\nMAPE=%f'%(r2_score(y_test, preds),rmse,mape))
+        plt.title('R^2=%f\nRMSE=%f\nMAPE=%f\nRPD=%f'%(r2_score(y_test, preds),rmse,mape,rpd))
         plt.plot(preds, y, color='g')
         point = plt.scatter(preds, y_test, c='#00CED1', alpha=0.4, label='预测点')
         plt.legend([point],['sample value'])
@@ -612,21 +640,21 @@ class Draw:
         plt.boxplot(boxData,labels = boxLabels,widths = 0.5)
         plt.show()
 if __name__ == '__main__':
-    '''
     ga = GA()
-    ga.modelFile = 'svr-linear.pickle'
-    ga.xlsFile = 'svr-dimension-reduce.xlsx'
-    ga.individualFile = 'svr-individual.txt'
-    ga.cls = SvrRegression()
+    ga.modelFile = 'bpnn-linear.pickle'
+    ga.xlsFile = 'bpnn-dimension-reduce.xlsx'
+    ga.individualFile = 'bpnn-individual.txt'
+    ga.cls = BpnnRegression()
     ga.evolution()
     '''
+    stDraw = Draw('stacking-linear.pickle', 'stacking-individual.txt')
+    stDraw.draw()
     bpnnDraw = Draw('bpnn-linear.pickle', 'bpnn-individual.txt')
-    bpnnDraw.drawFit()
-    bpnnDraw.drawBox()
+    bpnnDraw.draw()
     svrDraw = Draw('svr-linear.pickle', 'svr-individual.txt')
-    svrDraw.drawFit()
+    svrDraw.draw()
     plsrDraw = Draw('plsr-linear.pickle', 'plsr-individual.txt')
-    plsrDraw.drawFit()
+    plsrDraw.draw()
     bpnnDraw.model = PlsrBpnnRegression('bpnn-linear.pickle', 'plsr-linear.pickle')
     bpnnDraw.drawCombinedPredict()
-    
+    '''

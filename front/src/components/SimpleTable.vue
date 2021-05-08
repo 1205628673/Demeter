@@ -49,9 +49,19 @@
     <el-dialog
         :visible.sync="dialogVisible"
         @close="closeDialog"
-        width="60%">
-        <div id='myLine' style='height:500px;'/>
-        <div id='myPoint' style='height:500px;'/>
+        width="70%">
+        <div class='draw-panel'>
+            <div class='box-flex'> 
+                <div class='evaluation'>
+                    <p>R2={{this.r2}}</p>
+                    <p>RMSE={{this.rmse}}</p>
+                    <p>MAPE={{this.mape}}</p>
+                    <p>RPD={{this.rpd}}</p>
+                </div>
+                <div id='myLine' style='height:500px;'/>
+                <div id='myPoint' style='height:500px;'/>
+            </div>
+        </div>
         <el-button type="info" @click="gotoDetail">查看样本</el-button>
         <span slot="footer" class="dialog-footer">
             <el-button type="primary" @click="closeDialog">确 定</el-button>
@@ -72,6 +82,10 @@ import {get} from '../request/http'
                 total : 0,
                 pageSize : 0,
                 level : 0,
+                rmse : 0.0,
+                mape : 0.0,
+                rpd : 0.0,
+                r2 : 0.0,
                 dialogFid : 0,
                 dialogRegressor : '',
                 search:''
@@ -119,6 +133,10 @@ import {get} from '../request/http'
                     this.preds = data.preds
                     this.labels = data.labels
                     this.level = data.level
+                    this.rmse = data.rmse
+                    this.mape = data.mape
+                    this.rpd = data.rpd
+                    this.r2 = data.r2
                     var number = []
                     for(let i = 0;i < this.preds;i++) {
                         number.push(i)
@@ -128,7 +146,7 @@ import {get} from '../request/http'
                         pointArr[j] = new Array(2)
                     }
                     for(let i = 0;i<this.preds.length;i++) {
-                        pointArr[i] = [i, this.preds[i]]
+                        pointArr[i] = [this.labels[i], this.preds[i]]
                     }
                     let myPointChart = this.$echarts.init(document.getElementById('myPoint'))
                     myPointChart.setOption({
@@ -141,9 +159,10 @@ import {get} from '../request/http'
                         }]
                     })
                     let myLineChart = this.$echarts.init(document.getElementById('myLine'))
+                    console.info(myLineChart)
                     // 绘制图表
                     myLineChart.setOption({
-                        title: { text:  regressor +'回归'},
+                        title: { text: regressor+'回归'},
                         tooltip: {},
                         legend: {
                             data: ['observe', 'predict']

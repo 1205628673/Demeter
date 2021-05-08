@@ -8,6 +8,7 @@ import echarts from 'echarts'
 import simpleTable from './components/SimpleTable.vue'
 import upload from './components/Upload.vue'
 import sampleDetail from './components/SampleDetail.vue'
+import train from './components/Train.vue'
 Vue.config.productionTip = false
 Vue.use(ElementUI)
 Vue.use(VueRouter)
@@ -16,7 +17,8 @@ const routes = [
     { path: '/', component : simpleTable},
     { path : '/index', component : simpleTable },
     { path : '/upload', component : upload},
-    { path : '/sampledetail', component : sampleDetail}
+    { path : '/sampledetail', component : sampleDetail},
+    { path : '/train', component : train}
 ]
 const router = new VueRouter({
       routes: routes
