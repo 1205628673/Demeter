@@ -22,11 +22,13 @@
         <template slot-scope='scope'>
             <el-button type="primary" @click='guide(scope.row, "svr")'>SVR回归</el-button>
             <el-button type="danger" @click='guide(scope.row, "plsr")'>PLSR回归</el-button>
-            <el-button type="warning" @click='guide(scope.row, "bpnn")'>BPNN回归</el-button>
+            <el-button type="info" @click='guide(scope.row, "bpnn")'>BPNN回归</el-button>
             <el-button type="success" @click='guide(scope.row, "bp")'>BPNN-PLSR回归</el-button>
+            <el-button type="warning" @click='deleteFile(scope.row)'>删除样本文件</el-button>
         </template>
     </el-table-column>
-    <el-table-column>
+    <el-table-column
+        width='200px'>
     <!-- eslint-disable -->
         <template slot="header" slot-scope="scope">
             <el-input 
@@ -49,7 +51,8 @@
     <el-dialog
         :visible.sync="dialogVisible"
         @close="closeDialog"
-        width="70%">
+        width="70%"
+        v-loading="predictResultLoading">
         <div class='draw-panel'>
             <div class='box-flex'> 
                 <div class='evaluation'>
@@ -70,7 +73,7 @@
     </div>
 </template>
 <script>
-import {get} from '../request/http'
+    import {get,deleted} from '../request/http'
     export default{
         data() {
             return {
@@ -88,7 +91,8 @@ import {get} from '../request/http'
                 r2 : 0.0,
                 dialogFid : 0,
                 dialogRegressor : '',
-                search:''
+                search:'',
+                predictResultLoading:true
             }
         },
         methods:{
@@ -97,12 +101,27 @@ import {get} from '../request/http'
             },
             closeDialog() {
                 this.dialogVisible = false
+                this.predictResultLoading = true
                 this.preds = []
                 this.labels = []
                 this.level = 0  
             },
             gotoDetail() {
                 this.$router.push({path:'/sampledetail', query:{fid:this.dialogFid, regressor:this.dialogRegressor}})
+            },
+            deleteFile(e) {
+                var fid = e.id
+                deleted('/api/delete/file',{'fid':fid}).then(res => {
+                    if(res.code == 200) {
+                        this.$message({
+                            type:'success',
+                            message:res.message
+                        })
+                    }
+                    else{
+                        this.$message.error(res.message)
+                    }
+                })
             },
             findall(page) {
                 get('/api/findall', {'page':page}).then(res => {
@@ -137,6 +156,7 @@ import {get} from '../request/http'
                     this.mape = data.mape
                     this.rpd = data.rpd
                     this.r2 = data.r2
+                    this.predictResultLoading = false
                     var number = []
                     for(let i = 0;i < this.preds;i++) {
                         number.push(i)
@@ -150,8 +170,8 @@ import {get} from '../request/http'
                     }
                     let myPointChart = this.$echarts.init(document.getElementById('myPoint'))
                     myPointChart.setOption({
-                        xAxis: {name: 'predict value'},
-                        yAxis: {name: 'number of sample'},
+                        xAxis: {name: 'observe value'},
+                        yAxis: {name: 'predict value'},
                         series: [{
                             symbolSize: 10,
                             data: pointArr,
@@ -159,7 +179,6 @@ import {get} from '../request/http'
                         }]
                     })
                     let myLineChart = this.$echarts.init(document.getElementById('myLine'))
-                    console.info(myLineChart)
                     // 绘制图表
                     myLineChart.setOption({
                         title: { text: regressor+'回归'},

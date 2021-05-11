@@ -11,13 +11,19 @@ import time
 import numpy as np
 import sys,math
 from hashlib import md5
-sys.path.append('..') #添加上层路径
+sys.path.append('d:\\pyProjects\\Demeter') #添加上层路径
 import gabp
+from ascheduler import *
 
+DB_URI = 'mysql://root:root@127.0.0.1:3306/demeter'
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:root@127.0.0.1:3306/demeter'
-app.config['SQLALCHEMY_TRACK_MODIFICATION'] = True
+app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
+app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_POOL_SIZE'] = 60
 db = SQLAlchemy(app)
+sc = Scheduler()
+
 def regressionResultWarpper(preds, labels):
     #回归结果包装函数
     rmse = mean_squared_error(labels,preds) ** 0.5
@@ -66,34 +72,7 @@ def regressionResultWarpper(preds, labels):
 @app.route('/', methods = ['GET', 'POST'])
 def hello():
     return 'Hello world!'
-@app.route('/train', methods=['GET'])
-def train():
-    fid = request.args.get('fid')
-    regressor = request.args.get('regressor')
-    fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
-    filename = fileMapper.filename
-    ga = gabp.GA()
-    if regressor == 'svr':
-        ga.cls = gabp.SvrRegression(filename)
-    elif regressor == 'plsr':
-        ga.cls = gabp.PlsrRegression(filename)
-    elif regressor == 'bpnn':
-        ga.cls = gabp.BpnnRegression(filename)
-    elif regressor == 'bp':
-        ga.cls = gabp.PlsrBpnnRegression(filename)
-    else:
-        return {'message':'找不到模型','code':10002}
-    #设置训练中所选择的特征向量和模型的保存位置
-    timesuffix = str(time.time())
-    md5Name = md5(bytes(timesuffix)).hexdigest()
-    #设置txt格式的individual个体文件
-    ga.individualFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.txt')
-    #设置pickle格式的模型文件
-    ga.modelFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.pickle')
-    #设置xls格式的保留文件
-    ga.xlsFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.xlsx')
-    meanFitnesses,bestFitnesses = ga.evolution()
-    return {'message':'ok','code':200,'data':{'meanFitnesses':meanFitnesses,'bestFitnesses':bestFitnesses}}
+
 @app.route('/upload', methods = ['GET', 'POST'])
 def upload():
     if request.method == 'POST':
@@ -128,11 +107,12 @@ def upload():
 def plsrguide(fid):
     #PLSR模型回归
     if fid != None:
-        fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
+        fileMapper = db.session.query(metadata.FileMapper).filter_by(id = fid).first()
+        db.session.close()
         path = fileMapper.path
-        drawer = gabp.Draw('../plsr-linear.pickle', '../plsr-individual.txt')
+        drawer = gabp.Draw('plsr-linear.pickle', 'plsr-individual.txt')
         drawer.featuresPath = path
-        features, labels = drawer.loadFeature('../plsr-individual.txt')
+        features, labels = drawer.loadFeature('plsr-individual.txt')
         #labels = [] #取消标签
         regressor = drawer.model
         preds = regressor.predict(features)
@@ -146,11 +126,12 @@ def plsrguide(fid):
 def bpnnguide(fid):
     #bpnn模型回归
     if fid != None:
-        fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
+        fileMapper = db.session.query(metadata.FileMapper).filter_by(id = fid).first()
+        db.session.close()
         path = fileMapper.path
-        drawer = gabp.Draw('../bpnn-linear.pickle', '../bpnn-individual.txt')
+        drawer = gabp.Draw('bpnn-linear.pickle', 'bpnn-individual.txt')
         drawer.featuresPath = path
-        features, labels = drawer.loadFeature('../bpnn-individual.txt')
+        features, labels = drawer.loadFeature('bpnn-individual.txt')
         #labels = [] #取消标签
         regressor = drawer.model
         preds = regressor.predict(features)
@@ -164,11 +145,12 @@ def bpnnguide(fid):
 def svrguide(fid):
     #svr模型回归
     if fid != None:
-        fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
+        fileMapper = db.session.query(metadata.FileMapper).filter_by(id = fid).first()
+        db.session.close()
         path = fileMapper.path
-        drawer = gabp.Draw('../svr-linear.pickle', '../svr-individual.txt')
+        drawer = gabp.Draw('svr-linear.pickle', 'svr-individual.txt')
         drawer.featuresPath = path
-        features, labels = drawer.loadFeature('../svr-individual.txt')
+        features, labels = drawer.loadFeature('svr-individual.txt')
         #labels = [] #取消标签
         regressor = drawer.model
         preds = regressor.predict(features)
@@ -182,20 +164,21 @@ def svrguide(fid):
 def bpguide(fid):
     #根据回归模型指导土地营养程度分类
     if fid != None:
-        fileMapper = metadata.FileMapper.query.filter_by(id = fid).first()
+        fileMapper = db.session.query(metadata.FileMapper).filter_by(id = fid).first()
+        db.session.close()
         path = fileMapper.path
         #传入bpnn的模型和选择的特征号码，获得bpnn模型的特征
-        bpnnDrawer = gabp.Draw('../bpnn-linear.pickle', '../bpnn-individual.txt')
+        bpnnDrawer = gabp.Draw('bpnn-linear.pickle', 'bpnn-individual.txt')
         bpnnDrawer.featuresPath = path
-        bpnnFeatures, bpnnLabels = bpnnDrawer.loadFeature('../bpnn-individual.txt')
+        bpnnFeatures, bpnnLabels = bpnnDrawer.loadFeature('bpnn-individual.txt')
         #传入plsr的模型和选择的特征号码，获得plsr模型的特征
-        plsrDrawer = gabp.Draw('../plsr-linear.pickle', '../plsr-individual.txt')
+        plsrDrawer = gabp.Draw('plsr-linear.pickle', 'plsr-individual.txt')
         plsrDrawer.featuresPath = path
-        plsrFeatures, plsrLabels = plsrDrawer.loadFeature('../plsr-individual.txt')
+        plsrFeatures, plsrLabels = plsrDrawer.loadFeature('plsr-individual.txt')
         #加载PLSR-BPNN联合回归模型
-        plsrbpnnRegressor = gabp.PlsrBpnnRegression('../bpnn-linear.pickle', '../plsr-linear.pickle')
-        plsrbpnnRegressor.k1File = '../k1.txt'
-        plsrbpnnRegressor.k2File = '../k2.txt'
+        plsrbpnnRegressor = gabp.PlsrBpnnRegression('bpnn-linear.pickle', 'plsr-linear.pickle')
+        plsrbpnnRegressor.k1File = 'k1.txt'
+        plsrbpnnRegressor.k2File = 'k2.txt'
         preds = plsrbpnnRegressor.predict(plsrFeatures, bpnnFeatures)
         result = regressionResultWarpper(preds, bpnnLabels)
         return result
@@ -206,8 +189,8 @@ def bpguide(fid):
     return result
 def saveSoilSample(fid, preds, regressor):
     #如果库中没有该excel文件的样本数据则存库
-        samples = metadata.SoilSample.query.filter_by(fid = fid, regressor=regressor).first()
-        print(samples)
+        samples = db.session.query(metadata.SoilSample).filter_by(fid = fid, regressor=regressor).first()
+        db.session.close()
         if samples == None:
             samples = []
             for i in range(len(preds)):
@@ -224,13 +207,38 @@ def saveSoilSample(fid, preds, regressor):
                 db.session.rollback()
             finally:
                 db.session.close()
+@app.route('/delete/file', methods=['GET','DELETE'])
+def deleteFile():
+    fid = request.args.get('fid')
+    fileMapper =   db.session.query(metadata.FileMapper).filter_by(id = fid).first()
+    db.session.delete(fileMapper)
+    db.session.commit()
+    db.session.close()
+    return jsonify({
+        'message':'删除文件成功',
+        'code':200
+    })
+
+@app.route('/delete/model', methods = ['GET','DELETE'])
+def deleteCustomizeModel():
+    mid = request.args.get('mid')
+    customizeModel = db.session.query(metadata.UserModel).filter_by(id = mid).first()
+    db.session.delete(customizeModel)
+    db.session.commit()
+    db.session.close()
+    return jsonify({
+        'message':'删除自定义模型成功',
+        'code':200
+    })
+
 @app.route('/findsample', methods = ['GET', 'POST'])
 def findSample():
     fid = request.args.get('fid')
     page = int(request.args.get('page'))
     pageSize = 20
     regressor = request.args.get('regressor')
-    paginateObj = metadata.SoilSample.query.filter_by(fid = fid, regressor = regressor).paginate(page, pageSize, error_out = False)
+    paginateObj = db.session.query(metadata.SoilSample).filter_by(fid = fid, regressor = regressor).paginate(page, pageSize, error_out = False)
+    db.session.close()
     samples = paginateObj.items
     total = paginateObj.total
     currentPage = paginateObj.page
@@ -252,6 +260,30 @@ def findSample():
         'pageSize':pageSize
     }
     return result
+
+@app.route('/customize/predict', methods=['GET'])
+def customizePredict():
+    fileId = request.args.get('fid')
+    modelId = request.args.get('mid')
+    userModel = db.session.query(metadata.UserModel).filter_by(id = modelId).first()
+    fileMapper = db.session.query(metadata.FileMapper).filter_by(id = fileId).first()
+    db.session.close()
+    regressorType = userModel.regressor
+    modelFile = userModel.path
+    prefixFileName = modelFile.split('.')[0]
+    individualFile = prefixFileName + '.txt'
+    featuresFile = fileMapper.path
+    drawer = gabp.Draw(modelFile, individualFile)
+    drawer.featuresPath = featuresFile
+    features, labels = drawer.loadFeature()
+    regressor = drawer.model
+    preds = regressor.predict(features)
+    if regressorType == 'plsr':
+        result = regressionResultWarpper(preds.flatten().tolist(), labels)
+    else:
+        result = regressionResultWarpper(preds.tolist(), labels)
+    return result
+
 @app.route('/guide', methods = ['GET', 'POST'])
 def level():
     fid = request.args.get('fid')
@@ -273,7 +305,8 @@ def level():
 def findall():
     page = int(request.args.get('page'))
     pageSize = 10
-    paginateObj = metadata.FileMapper.query.paginate(page, pageSize, error_out = False)
+    paginateObj = db.session.query(metadata.FileMapper).paginate(page, pageSize, error_out = False)
+    db.session.close()
     fileMappers = paginateObj.items
     total = paginateObj.total
     currentPage = paginateObj.page
@@ -289,6 +322,112 @@ def findall():
         'pageSize':pageSize
     }
     return jsonify(result)
+
+@app.route('/train', methods=['GET'])
+def train():
+    fid = request.args.get('fid')
+    regressor = request.args.get('regressor')
+    tags = {
+        'fid' : fid,
+        'regressor' : regressor
+    }
+    sc.add_job(-1, handle_train, tags , fid, regressor)
+    return {'code':200, 'message':'开始训练'+regressor+'模型'}
+
+@app.route('/trainjob', methods=['GET'])
+def train_jobs():
+    page = int(request.args.get('page'))
+    pageSize = 10
+    paginateObj = db.session.query(metadata.UserModel).paginate(page, pageSize, error_out = False)
+    db.session.close()
+    userModels = paginateObj.items
+    currentPage = paginateObj.page
+    event_list = sc.eventStore.get_all_event()
+    model_list = []
+    #添加已完成的模型
+    best_fitness_array = []
+    mean_fitness_array = []
+    for um in userModels:
+        if um.best_fitness_values and um.mean_fitness_values:
+            best_fitness_array = um.best_fitness_values.split(',')
+            mean_fitness_array = um.mean_fitness_values.split(',')
+        model = {
+            'id' : um.id,
+            'fid' : um.fid,
+            'best_fitness_values' : best_fitness_array,
+            'mean_fitness_values' : mean_fitness_array,
+            'regressor': um.regressor,
+            'path' : um.path,
+            'time': um.create_time
+        }
+        model_list.append(model)
+    #添加还在训练的模型
+    for event in event_list:
+        tags = event.tags
+        fid = tags['fid']
+        regressor = tags['regressor']
+        model = {
+            'fid' : fid,
+            'regressor' : regressor,
+            'time' : time.time()
+        }
+        model_list.append(model)
+    
+    total = len(model_list) #内存中的事件和数据库已经完成的事件
+
+    result = {
+        'message':'ok',
+        'code':200,
+        'data':model_list,
+        'page':currentPage,
+        'total':total,
+        'pageSize':pageSize
+        }
+    return jsonify(result)
+
+def handle_train(fid, regressor):
+    print('start a model train job...')
+    fileMapper = db.session.query(metadata.FileMapper).filter_by(id = fid).first()
+    db.session.close()
+    filename = fileMapper.filename
+    base_path = 'd:\\pyProjects\\Demeter\\upload\\'
+    filename = base_path + filename
+    ga = gabp.GA()
+    if regressor == 'svr':
+        ga.cls = gabp.SvrRegression(filename)
+    elif regressor == 'plsr':
+        ga.cls = gabp.PlsrRegression(filename)
+    elif regressor == 'bpnn':
+        ga.cls = gabp.BpnnRegression(filename)
+    elif regressor == 'bp':
+        ga.cls = gabp.PlsrBpnnRegression(filename)
+    else:
+        return {'message':'找不到模型','code':10002}
+    #设置训练中所选择的特征向量和模型的保存位置
+    timesuffix = str(time.time())
+    md5Name = md5(bytes(timesuffix,'utf8')).hexdigest()
+    #设置txt格式的individual个体文件
+    ga.individualFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.txt')
+    #设置pickle格式的模型文件
+    ga.modelFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.pickle')
+    #设置xls格式的保留文件
+    ga.xlsFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.xlsx')
+    meanFitnesses,bestFitnesses = ga.evolution()
+    best_fitness_values_str = ','.join(str(i) for i in bestFitnesses)
+    mean_fitness_values_str = ','.join(str(i) for i in meanFitnesses)
+    userModel = metadata.UserModel()
+    userModel.fid = fid
+    userModel.best_fitness_values = best_fitness_values_str
+    userModel.mean_fitness_values = mean_fitness_values_str
+    userModel.regressor = regressor
+    userModel.path = ga.modelFile
+    userModel.create_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) 
+    db.session.add(userModel)
+    db.session.commit()
+    return 0
+
+
 if __name__ == '__main__':
-    app.run()
+    f = sc.start()
+    app.run(processes=True)
     CORS(app)

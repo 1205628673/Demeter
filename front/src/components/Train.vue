@@ -7,18 +7,15 @@
         <el-table-column
             prop="filename"
             label="文件名"
-            width="180"
             header-align="center">
         </el-table-column>
         <el-table-column
             prop="id"
             label="ID"
-            width="180"
             header-align="center">
         </el-table-column>
         <el-table-column
             label="操作"
-            width="180"
             header-align="center">
             <template slot-scope='scope'>
                 <el-button type='success' @click="train(scope.row, 'svr')">SVR模型训练</el-button>
@@ -43,8 +40,12 @@
             width="70%">
             <div class="wait-box">
                 <div class="wait-text">
-                    <p>正在训练模型....</p>
+                    <p>开始训练模型....</p>
+                    <p>这将花费一些时间</p>
                 </div>
+                <span slot="footer" class="dialog-footer">
+                    <el-button type="primary" @click="closeDialog">确 定</el-button>
+                </span>
             </div>
         </el-dialog>
     </div>
@@ -70,9 +71,10 @@
                 var id = e.id //获得文件id
                 get('/api/train', {'fid' : id, 'regressor' : regressor}).then(res => {
                     if(res.code == 200) {
-                        var data = res.data
-                        this.meanFitnesses = data.meanFitnesses
-                        this.bestFitnesses = data.bestFitnesses
+                        this.$message({
+                            type:'success',
+                            message:res.message
+                        })
                     } else{
                         this.$message.error(res.message);
                     }

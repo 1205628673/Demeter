@@ -120,7 +120,7 @@ class Regression(Classification):
         for i in wb.active:
             if not all([cell.value == None for cell in i]):
                 row += 1
-        column = sh.max_column
+        column = 41#sh.max_column #定死为41列
         for r in range(1,row + 1):
             for c in range(1,column):
                 data = sh.cell(row = r,column = c)
@@ -147,21 +147,21 @@ class KNNRegression(Regression):
         super().__init__()
         self.model = KNeighborsRegressor(n_neighbors=5)
 class BpnnRegression(Regression):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, filename):
+        super().__init__(filename)
         self.model = MLPRegressor(solver='lbfgs', alpha=1e-5,activation='relu',
                     hidden_layer_sizes=(26, 15), random_state=1, max_iter=10000)
         #self.model = MLPRegressor(solver='lbfgs', alpha=1e-5,activation='relu',
         #            hidden_layer_sizes=(15,), random_state=1, max_iter=10000)
 class PlsrRegression(Regression):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, filename):
+        super().__init__(filename)
         self.model = PLSRegression(n_components=len(self.features_x) - 1)
     def train(self,features,labels):
         self.model = PLSRegression(n_components=len(features[0]))
 class SvrRegression(Regression):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, filename):
+        super().__init__(filename)
         self.model = SVR(kernel='linear', gamma=0.01, C=0.1)
 class PlsrBpnnRegression():
     def __init__(self, bpnn, plsr):
@@ -505,7 +505,9 @@ class Draw:
     def loadModel(self):
         with open(self.modelFile,'rb') as f:
             self.model = pickle.load(f)
-    def loadFeature(self,individualFile):
+    def loadFeature(self,individualFile = None):
+        if individualFile == None:
+            individualFile = self.individualFile
         #根据个体二进制的表现型来读取选择的维度
         featureNum = 0 #记录维度数
         featureIndexs = [] #维度下标
@@ -641,10 +643,10 @@ class Draw:
         plt.show()
 if __name__ == '__main__':
     ga = GA()
-    ga.modelFile = 'bpnn-linear.pickle'
-    ga.xlsFile = 'bpnn-dimension-reduce.xlsx'
-    ga.individualFile = 'bpnn-individual.txt'
-    ga.cls = BpnnRegression()
+    ga.modelFile = 'plsr-linear.pickle'
+    ga.xlsFile = 'plsr-dimension-reduce.xlsx'
+    ga.individualFile = 'plsr-individual.txt'
+    ga.cls = BpnnRegression('D:\\soil-feature.xlsx')
     ga.evolution()
     '''
     stDraw = Draw('stacking-linear.pickle', 'stacking-individual.txt')
