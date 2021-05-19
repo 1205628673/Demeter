@@ -23,16 +23,81 @@ class Event:
         self.run_time = time.time() + self.e_interval
         self.state = state
         self.tags = tags
-    
+        self.callback = None
+        self.callback_args = None
+        
     def set_run_time(self,runtime):
         self.run_time = runtime
         return self.run_time
     
+
+    def set_callback(self, fn_callback, *args):
+        self.callback = fn_callback
+        self.callback_args = args
+
     def stop(self):
         self.state = STATE_STOP
 
     def ready(self):
         self.state = STATE_READY
+
+class TimeWheelsEventNode:
+
+    def __init__(self, event, due_round):
+        self.due_round = due_round
+        self.event = event
+
+class LinkedList:
+
+    class LinkedListNode:
+        def __init__(self, node = None):
+            self.next = None
+            self.node = node
+    
+    class Iterator:
+        def __init__(self):
+            self.node = None
+
+        def has_next(self):
+            return True if self.node.next else False
+
+        def next(self):
+            self.node = self.node.next
+            return self.node            
+        
+    def __init__(self):
+        self.head = LinkedList.LinkedListNode()
+        self.__num = 0
+
+    def add(self, node):
+        linkedNode = self.head
+        if linkedNode.next == None:
+                linkedNode.next = LinkedList.LinkedListNode(node)
+        else:
+            while linkedNode.next:
+                linkedNode = linkedNode.next
+            linkedNode.next = LinkedList.LinkedListNode(node)
+        self.__num += 1
+
+    def remove(self, index):
+        if index < 0 or index > self.__num - 1: 
+            raise Exception('out of range in linked list')
+        linkedNode = self.head
+        i = 0
+        while i < index:
+            linkedNode = linkedNode.next
+        if index == self.__num - 1:
+            linkedNode.next = None
+        else:
+            removedNode = linkedNode.next
+            nextNode = removedNode.next
+            linkedNode.next = nextNode
+        self.__num -= 1
+    
+    def iterator(self):
+        iter = LinkedList.Iterator()
+        iter.node = self.head
+        return iter
 
 class EventStore:
 
@@ -67,15 +132,40 @@ class EventStore:
                 events.append(event)
         return events
 
+class TimeWheels:
+
+    def __init__(self, max_size = 16):
+        self.max_size = max_size # time wheels list max size 
+        self.circle_list = [LinkedList() for i in range(self.max_size)]
+        self.round = 0 # how round of current ,every gone max size of circle list, it will add 1  
+        self.current_index = 0 # circle list index of this round
+
+    def set_time_chip_to_event(self, event):
+        # less or equals than 0 that mean do event now 
+        # greate than 0 ,it mean interval event,we need to compute how round and position time wheels index
+        if event.e_interval <= 0:
+            target_index = self.current_index + 1
+            self.circle_list[target_index].add(TimeWheelsEventNode(event, self.round))
+        else:
+            event_interval = event.e_interval
+            target_index = (self.current_index + event_interval) % self.max_size
+            target_round = self.round + (self.current_index + event_interval) // self.max_size
+            self.circle_list[target_index].add(TimeWheelsEventNode(event, target_round))
+
+    def increment_current_index(self):
+        self.round = self.round + (self.current_index + 1) // (self.max_size)
+        self.current_index = (self.current_index + 1) % (self.max_size)
+
 class Scheduler:
 
     def __init__(self, executor_workers = 10, executor_timeout = 60 * 5):
         self.executor = Executor(max_workers=executor_workers)
-        self.eventStore = EventStore()
+        self.event_store = EventStore()
+        self.time_wheels = TimeWheels(16)
         self.executor_timeout = executor_timeout
         self.__re_entry_lock = 0
         self.__own_thread_id = None
-        self.__main_loop_condition = threading.Condition()
+        self.__interrupted = False
 
     def re_entry(self):
         if self.__own_thread_id == None:
@@ -93,97 +183,64 @@ class Scheduler:
         else:
             print('current thread with ower thread is not same')
             return 1
-    # To find now all due event in event_list
-    # and job in due event would called by Executor do_job function 
-    def get_due_time_event(self, now_time, event_list):
-        due_event_list = []
-        for event in event_list:
-            if event.run_time < now_time and (event.state == STATE_READY):
-                due_event_list.append(event)
-        return due_event_list
-    
-    def get_min_time(self, event_list):
-        min_time = 1 << 32
-        for event in event_list:
-            if event.run_time < min_time and event.state == STATE_READY:
-                min_time = event.run_time
-        if min_time == 1 << 32:
-            # if not have event that state was state_ready in event_list
-            # set min_time = 0 to sure main_loop don't sleep too long.
-            min_time = time.time()
-        return min_time
-
-    def __set_next_run_time(self, now_time, events):
-        for event in events:
-            if event.state == STATE_READY:
-                if event.e_interval > 0:
-                    event.run_time = now_time + event.e_interval
-                else:
-                    # if event interval less than 0 ,it mean the event just do once and go to done
-                    # set run_time = now time let doing now.
-                    event.run_time = time.time() + 1 
 
     def handle_done_event(self):
         while True:
             # interval of five second to check every event's state in eventstore
             # and remove done event from eventstore  
-            time.sleep(5) 
-            events = self.eventStore.get_all_event()
+            time.sleep(5)
+            events = self.event_store.get_all_event()
             for event in events:
                 if event.e_future != None and event.e_future.done():
                     print(event.e_future.exception())
-                    if event.e_interval < 0:
-                        event.state = STATE_DONE
-                        self.eventStore.remove_event(event)
-                    else:
-                        event.state = STATE_READY
+                    self.event_store.remove_event(event)
 
 
     def add_job(self, interval, job, tags=None, *args):
         event = Event(job = job, timeout = self.executor_timeout, interval = interval,tags=tags, args=args)
-        self.eventStore.add_event(event)
-        self.__main_loop_condition.acquire()
-        self.__main_loop_condition.notify()
-        self.__main_loop_condition.release()
+        self.time_wheels.set_time_chip_to_event(event)
         return event
 
     def __do_sleep(self, sleep_time):
         time.sleep(sleep_time)
 
-    def __do_real_start(self):
-        now_time = time.time()
-        due_event_list = self.get_due_time_event(now_time, self.eventStore.get_event_list())
-        for event in due_event_list:
-            self.executor.do_job(event, self.executor_timeout)
-            event.state = STATE_RUNNING
-        self.__set_next_run_time(now_time, due_event_list)
+    # handle due event on time wheels chip ,this chip is a linked list,
+    # in there we async do due event and remove which due event from chip.
+    def handle_chip_due_event(self, chip):
+        iter = chip.iterator()
+        i = 0
+        while iter.has_next():
+            time_wheels_event = iter.next()
+            if time_wheels_event.node.due_round == self.time_wheels.round:
+                event = time_wheels_event.node.event
+                self.event_store.add_event(event)
+                self.executor.do_job(event)
+                if event.e_interval > 0:
+                    # if this event is a delay interval event,put in time wheels again
+                    self.time_wheels.set_time_chip_to_event(event)
+                chip.remove(i)
+            i = i + 1
 
     def __main_loop(self):
-        now_time = time.time()
         self.re_entry()
-        interrupted = False
         try:
-            while not interrupted:
-                event_list = self.eventStore.get_event_list()
-                if len(event_list) == 0:
-                    print('not find ready event,take a nip wait for notify from add_job ')
-                    self.__main_loop_condition.acquire()
-                    self.__main_loop_condition.wait()
-                    self.__main_loop_condition.release()
-                    continue
-                sleep_time = self.get_min_time(event_list) - time.time()
-                if sleep_time > 0:
-                    self.__do_sleep(sleep_time)
-                self.__do_real_start()
-        except KeyboardInterrupt():
-            interrupted = True
+            while not self.__interrupted:
+                time_chip = self.time_wheels.circle_list[self.time_wheels.current_index]
+                self.handle_chip_due_event(time_chip)
+                self.__do_sleep(1)
+                self.time_wheels.increment_current_index()
+        except Exception():
             print('interrupt...')
         self.out_re_entry()
 
     def start(self):
+        self.__interrupted = False
         start_future = self.executor.start_main_loop(self.__main_loop)
         handle_done_future = self.executor.start_handle_done_event(self.handle_done_event)
-        return 0
+        return start_future
+
+    def shutdown(self):
+        self.__interrupted = True
 
 class Executor:
 
@@ -210,10 +267,6 @@ class Executor:
         #feature.result(timeout) # set executor asyc timeout 
         #feature.add_done_callback() # bind event callback function
 
-def test1(key):
-    print('start 1')
-    time.sleep(5)
-    print('Test function with asyc background and identify:1')
 def test2(key,k2):
     print('start 2')
     print(key)

@@ -19,6 +19,7 @@ from sklearn.neighbors import KNeighborsRegressor
 from mlxtend.regressor import StackingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import Ridge
+from sqlalchemy.sql.elements import Label
 def make_matrix(m, n, fill=0.0):
     mat = []
     for i in range(m):
@@ -566,8 +567,8 @@ class Draw:
         sd = math.sqrt(sd / len(bpnnLabels))
         rpd = sd / rmse
         plt.figure(figsize=(10,7))
-        plt.plot([i for i in range(len(bpnnLabels))], bpnnPreds, 'b--o')
-        plt.plot([i for i in range(len(bpnnLabels))], preds,'r--*')
+        plt.plot([i for i in range(len(bpnnLabels))], bpnnPreds, 'b--o', label='observe value')
+        plt.plot([i for i in range(len(bpnnLabels))], preds,'r--*', label='predict value')
         plt.title('R^2=%f\nRMSE=%f\nMASE=%f\nRPD=%f'%(r2_score(bpnnLabels, preds),rmse,mase,rpd))
         plt.xlabel('sample number')
         plt.ylabel('predict value')
@@ -603,8 +604,9 @@ class Draw:
         y = np.polyval(parameter, preds)
         #画线图
         plt.figure(figsize=(10,7))
-        obs, = plt.plot([i for i in range(len(y_test))], y_test, 'b--o')
-        p, = plt.plot([i for i in range(len(y_test))], preds,'r--*')
+        obs, = plt.plot([i for i in range(len(y_test))], y_test, 'b--o', label='observe value')
+        p, = plt.plot([i for i in range(len(y_test))], preds,'r--*', label='predict value')
+        plt.legend()
         plt.xlabel('sample number')
         plt.ylabel('predict value')
         plt.legend([obs, p], ['observe', 'predict'])
@@ -642,6 +644,7 @@ class Draw:
         plt.boxplot(boxData,labels = boxLabels,widths = 0.5)
         plt.show()
 if __name__ == '__main__':
+    '''
     ga = GA()
     ga.modelFile = 'plsr-linear.pickle'
     ga.xlsFile = 'plsr-dimension-reduce.xlsx'
@@ -659,4 +662,3 @@ if __name__ == '__main__':
     plsrDraw.draw()
     bpnnDraw.model = PlsrBpnnRegression('bpnn-linear.pickle', 'plsr-linear.pickle')
     bpnnDraw.drawCombinedPredict()
-    '''

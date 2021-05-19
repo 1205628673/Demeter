@@ -104,7 +104,7 @@
                 this.predictResultLoading = true
                 this.preds = []
                 this.labels = []
-                this.level = 0  
+                this.level = 0
             },
             gotoDetail() {
                 this.$router.push({path:'/sampledetail', query:{fid:this.dialogFid, regressor:this.dialogRegressor}})

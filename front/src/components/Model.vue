@@ -195,14 +195,10 @@
                             let fid = model.fid
                             let regressor = model.regressor
                             let time = model.time
-                            let state = ''
+                            let state = model.state
                             let bestFitnessValues = []
                             let meanFitnessValues = []
-                            if(!model.path) {
-                                state = '正在训练中'
-                            }
-                            else{
-                                state = '已完成'
+                            if(model.path) {
                                 bestFitnessValues = model.best_fitness_values
                                 meanFitnessValues = model.mean_fitness_values
                             }

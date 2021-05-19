@@ -13,6 +13,7 @@ import sys,math
 from hashlib import md5
 sys.path.append('d:\\pyProjects\\Demeter') #添加上层路径
 import gabp
+import uuid
 from ascheduler import *
 
 DB_URI = 'mysql://root:root@127.0.0.1:3306/demeter'
@@ -84,7 +85,7 @@ def upload():
                 'message':'invalid file extension'
             })
         extension = '.' + filename.split(".")[1]
-        timesuffex = str(time.time())
+        timesuffex = str(time.time()) + str(uuid.uuid4())
         md5Name = md5(filename.encode('utf8') + bytes(timesuffex,'utf8')).hexdigest() + extension
         basepath = 'D:\\pyProjects\\Demeter\\upload'
         uploadpath = os.path.join(basepath, md5Name)
@@ -99,10 +100,10 @@ def upload():
         db.session.add(fileMapper)
         db.session.commit()
         return jsonify(result)
-        result = {
-            'code':503,
-            'message':'Invalid method'
-        }
+    result = {
+        'code':503,
+        'message':'Invalid method'
+    }
     return jsonify(result)
 def plsrguide(fid):
     #PLSR模型回归
@@ -342,7 +343,7 @@ def train_jobs():
     db.session.close()
     userModels = paginateObj.items
     currentPage = paginateObj.page
-    event_list = sc.eventStore.get_all_event()
+    event_list = sc.event_store.get_all_event()
     model_list = []
     #添加已完成的模型
     best_fitness_array = []
@@ -358,7 +359,8 @@ def train_jobs():
             'mean_fitness_values' : mean_fitness_array,
             'regressor': um.regressor,
             'path' : um.path,
-            'time': um.create_time
+            'time': um.create_time,
+            'state' : '已完成'
         }
         model_list.append(model)
     #添加还在训练的模型
@@ -369,7 +371,8 @@ def train_jobs():
         model = {
             'fid' : fid,
             'regressor' : regressor,
-            'time' : time.time()
+            'time' : time.time(),
+            'state' : '正在训练中'
         }
         model_list.append(model)
     
@@ -386,7 +389,7 @@ def train_jobs():
     return jsonify(result)
 
 def handle_train(fid, regressor):
-    print('start a model train job...')
+    print('start a model of {} -{} train job...'.format(regressor, fid))
     fileMapper = db.session.query(metadata.FileMapper).filter_by(id = fid).first()
     db.session.close()
     filename = fileMapper.filename
@@ -404,7 +407,7 @@ def handle_train(fid, regressor):
     else:
         return {'message':'找不到模型','code':10002}
     #设置训练中所选择的特征向量和模型的保存位置
-    timesuffix = str(time.time())
+    timesuffix = str(uuid.uuid4())
     md5Name = md5(bytes(timesuffix,'utf8')).hexdigest()
     #设置txt格式的individual个体文件
     ga.individualFile = os.path.join('D:\\pyProjects\\Demeter\\upload', md5Name + '.txt')
